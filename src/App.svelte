@@ -8,6 +8,10 @@
   import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
   import SobelSettings from './lib/ui/settings/SobelSettings.svelte'
   import type { SobelPassSettings } from './lib/cv/passes/sobel/SobelPassSettings'
+  import LowCutoffSettings from './lib/ui/settings/LowCutoffSettings.svelte'
+  import type { LowCutoffPassSettings } from './lib/cv/passes/low-cutoff/LowCutoffPassSettings'
+  import TemporalSettings from './lib/ui/settings/TemporalSettings.svelte'
+  import type { TemporalPassSettings } from './lib/cv/passes/temporal/TemporalPassSettings'
   import type { PassBase } from './lib/cv/passes/PassBase'
 
   type InputOption = { id: string; label: string }
@@ -16,6 +20,8 @@
     'rec709-luma': Rec709Settings,
     bilateral: BilateralSettings,
     sobel: SobelSettings,
+    'low-cutoff': LowCutoffSettings,
+    temporal: TemporalSettings,
   }
 
   let selectedPassId = ''
@@ -148,6 +154,20 @@
             required={passDef.required}
             frontSettings={frontSettings as SobelPassSettings}
             rearSettings={rearSettings as SobelPassSettings}
+          />
+        {:else if passDef.id === 'low-cutoff'}
+          <svelte:component
+            this={SettingsComponent}
+            required={passDef.required}
+            frontSettings={frontSettings as LowCutoffPassSettings}
+            rearSettings={rearSettings as LowCutoffPassSettings}
+          />
+        {:else if passDef.id === 'temporal'}
+          <svelte:component
+            this={SettingsComponent}
+            required={passDef.required}
+            frontSettings={frontSettings as TemporalPassSettings}
+            rearSettings={rearSettings as TemporalPassSettings}
           />
         {:else}
           <svelte:component this={SettingsComponent} />

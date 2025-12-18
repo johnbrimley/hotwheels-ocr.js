@@ -5,6 +5,10 @@ import { BilateralPassSettings } from '../passes/bilateral/BilateralPassSettings
 import { Rec709LumPass } from '../passes/rec-709-luma/Rec709LumaPass'
 import { SobelPass } from '../passes/sobel/SobelPass'
 import { SobelPassSettings } from '../passes/sobel/SobelPassSettings'
+import { LowCutoffPass } from '../passes/low-cutoff/LowCutoffPass'
+import { LowCutoffPassSettings } from '../passes/low-cutoff/LowCutoffPassSettings'
+import { TemporalPass } from '../passes/temporal/TemporalPass'
+import { TemporalPassSettings } from '../passes/temporal/TemporalPassSettings'
 
 export type BoundaryPipelinePass = {
   id: string
@@ -36,10 +40,20 @@ export class BoundaryPipeline {
     sobelSettings.minEdge = 0.0
     const sobel = new SobelPass(gl, sobelSettings)
 
+    const lowCutoffSettings = new LowCutoffPassSettings()
+    lowCutoffSettings.threshold = 0.15
+    const lowCutoff = new LowCutoffPass(gl, lowCutoffSettings)
+
+    const temporalSettings = new TemporalPassSettings()
+    temporalSettings.enabled = true
+    const temporal = new TemporalPass(gl, temporalSettings)
+
     this.passes = [
       { id: 'rec709-luma', label: 'Rec709 Luma', required: true, pass: rec709 },
       { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
       { id: 'sobel', label: 'Sobel', required: false, pass: sobel },
+      { id: 'low-cutoff', label: 'Low Cutoff', required: false, pass: lowCutoff },
+      { id: 'temporal', label: 'Temporal Median', required: false, pass: temporal },
     ]
     this.passMap = new Map(this.passes.map((p) => [p.id, p]))
 
