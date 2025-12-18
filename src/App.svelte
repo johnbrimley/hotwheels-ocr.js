@@ -1,61 +1,21 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
-  import { ComputerVisionPipeline } from './lib/cv/ComputerVisionPipeline'
+  import { BoundaryPipeline, type BoundaryPipelinePass } from './lib/cv/pipelines/BoundaryPipeline'
   import { ImageCaptureContext } from './lib/cv/ImageCaptureContext'
-  import { BilateralPass } from './lib/cv/passes/bilateral/BilateralPass'
-  import { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
-  import { Rec709LumPass } from './lib/cv/passes/rec-709-luma/Rec709LumaPass'
-  import PassSettingsPanel from './lib/ui/PassSettingsPanel.svelte'
   import PassTabs from './lib/ui/PassTabs.svelte'
+  import BilateralSettings from './lib/ui/settings/BilateralSettings.svelte'
+  import Rec709Settings from './lib/ui/settings/Rec709Settings.svelte'
+  import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
+  import type { PassBase } from './lib/cv/passes/PassBase'
 
   type InputOption = { id: string; label: string }
 
-  type PassDefinition = {
-    id: string
-    label: string
-    required: boolean
-    create: (gl: WebGL2RenderingContext) => unknown
-    controls: {
-      key: string
-      label: string
-      min: number
-      max: number
-      step: number
-      defaultValue: number
-    }[]
+  const passSettingsComponents: Record<string, any> = {
+    'rec709-luma': Rec709Settings,
+    bilateral: BilateralSettings,
   }
 
-  type PassControlState = PassDefinition['controls'][number] & { value: number }
-  type PassUiState = { enabled: boolean; controls: PassControlState[] }
-
-  const passDefinitions: PassDefinition[] = [
-    {
-      id: 'rec709-luma',
-      label: 'Rec709 Luma',
-      required: true,
-      create: (gl) => new Rec709LumPass(gl),
-      controls: [],
-    },
-    {
-      id: 'bilateral',
-      label: 'Bilateral',
-      required: false,
-      create: (gl) => {
-        const settings = new BilateralPassSettings()
-        settings.kernelRadius = 2
-        settings.sigmaSpatial = 2.0
-        settings.sigmaRange = 0.1
-        return new BilateralPass(gl, settings)
-      },
-      controls: [
-        { key: 'u_kernelRadius', label: 'Kernel Radius', min: 1, max: 5, step: 1, defaultValue: 2 },
-        { key: 'u_sigmaSpatial', label: 'Sigma Spatial', min: 0.5, max: 10, step: 0.25, defaultValue: 2.0 },
-        { key: 'u_sigmaRange', label: 'Sigma Range', min: 0.01, max: 0.5, step: 0.01, defaultValue: 0.1 },
-      ],
-    },
-  ]
-
-  let selectedPassId: string = passDefinitions[0]?.id ?? ''
+  let selectedPassId = ''
 
   let inputContexts: Map<string, ImageCaptureContext> = new Map()
   let inputOptions: InputOption[] = []
@@ -66,21 +26,9 @@
   let frontCanvas: HTMLCanvasElement | null = null
   let rearCanvas: HTMLCanvasElement | null = null
 
-  let frontPipeline: ComputerVisionPipeline | null = null
-  let rearPipeline: ComputerVisionPipeline | null = null
-
-  let frontPasses: unknown[] = []
-  let rearPasses: unknown[] = []
-
-  let passUiStateById: Record<string, PassUiState> = Object.fromEntries(
-    passDefinitions.map((pass) => [
-      pass.id,
-      {
-        enabled: true,
-        controls: pass.controls.map((c) => ({ ...c, value: c.defaultValue })),
-      },
-    ])
-  ) as Record<string, PassUiState>
+  let frontBoundary: BoundaryPipeline | null = null
+  let rearBoundary: BoundaryPipeline | null = null
+  let passList: BoundaryPipelinePass[] = []
 
   let errorMessage: string | null = null
   let running = false
@@ -103,67 +51,19 @@
     if (!selectedRearInputId && inputOptions[0]) selectedRearInputId = inputOptions[0].id
   }
 
-  function buildPipeline(gl: WebGL2RenderingContext): { pipeline: ComputerVisionPipeline; passes: unknown[] } {
-    const pipeline = new ComputerVisionPipeline(gl)
-    const passes = passDefinitions.map((p) => p.create(gl))
-    for (const pass of passes) {
-      pipeline.addPass(pass as any)
-    }
-    return { pipeline, passes }
+  function getPassSettings(passId: string, boundary: BoundaryPipeline | null): PassBase['settings'] | null {
+    const pass = boundary?.getPass(passId)
+    return pass ? pass.settings : null
   }
 
-  function applyControlsToPipelines(passId: string): void {
-    const passIndex = passDefinitions.findIndex((p) => p.id === passId)
-    if (passIndex < 0) return
-
-    const uiState = passUiStateById[passId]
-    const controls = uiState?.controls ?? []
-
-    const applyToPass = (pass: any) => {
-      if (typeof uiState?.enabled === 'boolean') {
-        pass.enabled = uiState.enabled
-        if (pass.settings && typeof pass.settings.enabled === 'boolean') {
-          pass.settings.enabled = uiState.enabled
-        }
-      }
-      for (const control of controls) {
-        pass.settings.uniforms[control.key] = control.value
-      }
-    }
-
-    if (frontPasses[passIndex]) applyToPass(frontPasses[passIndex])
-    if (rearPasses[passIndex]) applyToPass(rearPasses[passIndex])
-  }
-
-  function setPassEnabled(passId: string, enabled: boolean): void {
-    const passDef = passDefinitions.find((p) => p.id === passId)
-    if (!passDef || passDef.required) return
-
-    passUiStateById = {
-      ...passUiStateById,
-      [passId]: { ...passUiStateById[passId], enabled },
-    }
-    applyControlsToPipelines(passId)
-  }
-
-  function setControlValue(passId: string, controlKey: string, value: number): void {
-    const uiState = passUiStateById[passId]
-    const controls = uiState?.controls ?? []
-    passUiStateById = {
-      ...passUiStateById,
-      [passId]: { ...uiState, controls: controls.map((c) => (c.key === controlKey ? { ...c, value } : c)) },
-    }
-    applyControlsToPipelines(passId)
-  }
-
-  async function renderSelected(pipeline: ComputerVisionPipeline | null, inputId: string): Promise<void> {
-    if (!pipeline || !inputId) return
+  async function renderSelected(boundary: BoundaryPipeline | null, inputId: string): Promise<void> {
+    if (!boundary || !inputId) return
     const ctx = inputContexts.get(inputId)
     if (!ctx) return
 
     const bitmap = (await (ctx.imageCapture as any).grabFrame()) as ImageBitmap
     try {
-      await pipeline.render(bitmap)
+      await boundary.pipeline.render(bitmap)
     } finally {
       bitmap.close()
     }
@@ -178,8 +78,8 @@
 
     frameInFlight = true
     try {
-      await renderSelected(frontPipeline, selectedFrontInputId)
-      await renderSelected(rearPipeline, selectedRearInputId)
+      await renderSelected(frontBoundary, selectedFrontInputId)
+      await renderSelected(rearBoundary, selectedRearInputId)
       errorMessage = null
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err)
@@ -201,17 +101,10 @@
         return
       }
 
-      const front = buildPipeline(frontGl)
-      frontPipeline = front.pipeline
-      frontPasses = front.passes
-
-      const rear = buildPipeline(rearGl)
-      rearPipeline = rear.pipeline
-      rearPasses = rear.passes
-
-      for (const pass of passDefinitions) {
-        applyControlsToPipelines(pass.id)
-      }
+      frontBoundary = new BoundaryPipeline(frontGl)
+      rearBoundary = new BoundaryPipeline(rearGl)
+      passList = frontBoundary.passes
+      selectedPassId = passList[0]?.id ?? ''
 
       running = true
       void loop()
@@ -228,22 +121,27 @@
 <main class="app">
   <section class="controls">
     <PassTabs
-      passes={passDefinitions.map((p) => ({ id: p.id, label: p.label }))}
+      passes={passList.map((p) => ({ id: p.id, label: p.label }))}
       {selectedPassId}
       on:select={(e) => (selectedPassId = e.detail.passId)}
     />
 
     {#if selectedPassId}
-      {@const passDef = passDefinitions.find((p) => p.id === selectedPassId)}
-      {@const uiState = passUiStateById[selectedPassId]}
-      {#if passDef && uiState}
-        <PassSettingsPanel
-          required={passDef.required}
-          enabled={uiState.enabled}
-          controls={uiState.controls.map((c) => ({ ...c, kind: 'slider' as const }))}
-          onEnabledChange={(enabled) => setPassEnabled(selectedPassId, enabled)}
-          onControlChange={(key, value) => setControlValue(selectedPassId, key, value)}
-        />
+      {@const passDef = passList.find((p) => p.id === selectedPassId)}
+      {@const SettingsComponent = passDef ? passSettingsComponents[passDef.id] : null}
+      {@const frontSettings = passDef ? getPassSettings(passDef.id, frontBoundary) : null}
+      {@const rearSettings = passDef ? getPassSettings(passDef.id, rearBoundary) : null}
+      {#if passDef && SettingsComponent && frontSettings}
+        {#if passDef.id === 'bilateral'}
+          <svelte:component
+            this={SettingsComponent}
+            required={passDef.required}
+            frontSettings={frontSettings as BilateralPassSettings}
+            rearSettings={rearSettings as BilateralPassSettings}
+          />
+        {:else}
+          <svelte:component this={SettingsComponent} />
+        {/if}
       {/if}
     {/if}
   </section>
@@ -281,7 +179,7 @@
   {/if}
 </main>
 
-  <style>
+<style>
   .app {
     height: 100%;
     width: 100%;
