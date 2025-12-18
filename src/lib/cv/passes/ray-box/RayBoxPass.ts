@@ -4,198 +4,214 @@ import { PassBase } from '../PassBase';
 import type { RayBoxPassSettings } from './RayBoxPassSettings';
 import boxOverlayFrag from './box-overlay.frag?raw';
 
-type LineNormal = { theta: number; rho: number; score: number };
 type Point = { x: number; y: number };
 
 export class RayBoxPass extends PassBase {
-    private boxProgramInfo: twgl.ProgramInfo;
-    private outputRenderTarget: RenderTarget2D;
-    private pixelBuffer: Uint8Array | null = null;
-    private pixelFormat: number = 0;
-    private pixelChannels: number = 0;
+  private boxProgramInfo: twgl.ProgramInfo;
+  private outputRenderTarget: RenderTarget2D;
+  private pixelBuffer: Uint8Array | null = null;
+  private pixelChannels = 0;
 
-    constructor(gl: WebGL2RenderingContext, settings: RayBoxPassSettings) {
-        super(gl, settings);
-        this.boxProgramInfo = this.createProgramInfo(boxOverlayFrag);
-        this.outputRenderTarget = RenderTarget2D.createRGBA8(gl);
+  constructor(gl: WebGL2RenderingContext, settings: RayBoxPassSettings) {
+    super(gl, settings);
+    this.boxProgramInfo = this.createProgramInfo(boxOverlayFrag);
+    this.outputRenderTarget = RenderTarget2D.createRGBA8(gl);
+  }
+
+  /* ============================ Pixel Read ============================ */
+
+  private ensurePixelBuffer(width: number, height: number, channels: number): void {
+    const needed = width * height * channels;
+    if (!this.pixelBuffer || this.pixelBuffer.length !== needed) {
+      this.pixelBuffer = new Uint8Array(needed);
+    }
+    this.pixelChannels = channels;
+  }
+
+  private readPixelsToBuffer(rt: RenderTarget2D): { width: number; height: number } {
+    const width = rt.framebufferInfo.width;
+    const height = rt.framebufferInfo.height;
+    const isR8 = rt.isR8;
+
+    const format = isR8 ? this.gl.RED : this.gl.RGBA;
+    const channels = isR8 ? 1 : 4;
+    this.ensurePixelBuffer(width, height, channels);
+
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, rt.framebufferInfo.framebuffer);
+    this.gl.readPixels(0, 0, width, height, format, this.gl.UNSIGNED_BYTE, this.pixelBuffer!);
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+
+    return { width, height };
+  }
+
+  /* ============================ Sampling ============================ */
+  // readPixels is bottom-left origin → flip Y here ONCE
+  private sampleMax3x3(x: number, y: number, w: number, h: number): number {
+    if (!this.pixelBuffer) return 0;
+
+    const xi = Math.round(x);
+    const yi = Math.round(y);
+    let best = 0;
+
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const sx = Math.max(0, Math.min(w - 1, xi + ox));
+        const syImg = Math.max(0, Math.min(h - 1, yi + oy));
+        const sy = (h - 1) - syImg; // Y FLIP HERE
+
+        const idx = (sy * w + sx) * this.pixelChannels;
+        best = Math.max(best, this.pixelBuffer[idx] / 255);
+      }
     }
 
-    private ensurePixelBuffer(width: number, height: number, channels: number): void {
-        const needed = width * height * channels;
-        if (!this.pixelBuffer || this.pixelBuffer.length !== needed) {
-            this.pixelBuffer = new Uint8Array(needed);
+    return best;
+  }
+
+  /* ============================ Ray Cast ============================ */
+
+  private findRayHits(
+    width: number,
+    height: number,
+    threshold: number,
+    rayCount: number,
+    step: number
+  ): Point[] {
+    const cx = (width - 1) * 0.5;
+    const cy = (height - 1) * 0.5;
+    const hits: Point[] = [];
+
+    for (let i = 0; i < rayCount; i++) {
+      const a = (i / rayCount) * Math.PI * 2;
+      const dx = Math.cos(a);
+      const dy = Math.sin(a);
+
+      const tx = dx > 0 ? (width - 1 - cx) / dx : dx < 0 ? -cx / dx : Infinity;
+      const ty = dy > 0 ? (height - 1 - cy) / dy : dy < 0 ? -cy / dy : Infinity;
+      const tMax = Math.min(tx, ty);
+      if (!isFinite(tMax)) continue;
+
+      for (let t = tMax; t >= 0; t -= step) {
+        const x = cx + dx * t;
+        const y = cy + dy * t;
+        if (this.sampleMax3x3(x, y, width, height) >= threshold) {
+          hits.push({
+            x: x / (width - 1),
+            y: y / (height - 1), // image-space (top-left origin)
+          });
+          break;
         }
-        this.pixelChannels = channels;
+      }
     }
 
-    private readPixelsToBuffer(renderTargetIn: RenderTarget2D): { width: number; height: number } {
-        const width = renderTargetIn.framebufferInfo.width;
-        const height = renderTargetIn.framebufferInfo.height;
-        const isR8 = renderTargetIn.isR8;
+    return hits;
+  }
 
-        const format = isR8 ? this.gl.RED : this.gl.RGBA;
-        const channels = isR8 ? 1 : 4;
-        this.pixelFormat = format;
-        this.ensurePixelBuffer(width, height, channels);
+  /* ============================ PCA Box Fit ============================ */
 
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, renderTargetIn.framebufferInfo.framebuffer);
-        this.gl.readPixels(
-            0,
-            0,
-            width,
-            height,
-            format,
-            this.gl.UNSIGNED_BYTE,
-            this.pixelBuffer!
-        );
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-
-        return { width, height };
+  private computeOBBCorners(points: Point[]): Point[] {
+    if (points.length < 4) {
+      const s = 0.25;
+      return [
+        { x: 0.5 - s, y: 0.5 - s },
+        { x: 0.5 + s, y: 0.5 - s },
+        { x: 0.5 + s, y: 0.5 + s },
+        { x: 0.5 - s, y: 0.5 + s },
+      ];
     }
 
-    private sample(x: number, y: number, width: number): number {
-        if (!this.pixelBuffer) return 0;
-        const xi = Math.max(0, Math.min(width - 1, Math.round(x)));
-        const yi = Math.max(0, Math.round(y));
-        const idx = (yi * width + xi) * this.pixelChannels;
-        const v = this.pixelBuffer[idx];
-        return v / 255;
+    let cx = 0, cy = 0;
+    for (const p of points) { cx += p.x; cy += p.y; }
+    cx /= points.length;
+    cy /= points.length;
+
+    let sxx = 0, sxy = 0, syy = 0;
+    for (const p of points) {
+      const x = p.x - cx;
+      const y = p.y - cy;
+      sxx += x * x;
+      sxy += x * y;
+      syy += y * y;
     }
 
-    private findRayHits(width: number, height: number, threshold: number, rayCount: number): Point[] {
-        const cx = (width - 1) / 2;
-        const cy = (height - 1) / 2;
-        const hits: Point[] = [];
+    const tr = sxx + syy;
+    const det = sxx * syy - sxy * sxy;
+    const root = Math.sqrt(Math.max(0, tr * tr - 4 * det));
+    const lambda = (tr + root) * 0.5;
 
-        for (let i = 0; i < rayCount; i++) {
-            const angle = (i / rayCount) * Math.PI * 2;
-            const dx = Math.cos(angle);
-            const dy = Math.sin(angle);
+    let ux = sxy;
+    let uy = lambda - sxx;
+    const len = Math.hypot(ux, uy) || 1;
+    ux /= len; uy /= len;
 
-            // distance to boundary along direction
-            const tx = dx > 0 ? (width - 1 - cx) / dx : dx < 0 ? (0 - cx) / dx : Number.POSITIVE_INFINITY;
-            const ty = dy > 0 ? (height - 1 - cy) / dy : dy < 0 ? (0 - cy) / dy : Number.POSITIVE_INFINITY;
-            const tStart = Math.min(tx, ty);
+    const vx = -uy;
+    const vy = ux;
 
-            for (let t = tStart; t >= 0; t -= 1) {
-                const x = cx + dx * t;
-                const y = cy + dy * t;
-                const value = this.sample(x, y, width);
-                if (value >= threshold) {
-                    hits.push({ x: x / (width - 1), y: y / (height - 1) });
-                    break;
-                }
-            }
-        }
-
-        return hits;
+    const us: number[] = [];
+    const vs: number[] = [];
+    for (const p of points) {
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      us.push(dx * ux + dy * uy);
+      vs.push(dx * vx + dy * vy);
     }
 
-    private lineFromPoints(a: Point, b: Point): { theta: number; rho: number } {
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        let theta = Math.atan2(dy, dx) + Math.PI / 2;
-        if (theta < 0) theta += Math.PI * 2;
-        if (theta >= Math.PI * 2) theta -= Math.PI * 2;
-        const rho = a.x * Math.cos(theta) + a.y * Math.sin(theta);
-        return { theta, rho };
+    us.sort((a, b) => a - b);
+    vs.sort((a, b) => a - b);
+
+    const trim = Math.floor(points.length * 0.12);
+    const u0 = us[trim];
+    const u1 = us[us.length - 1 - trim];
+    const v0 = vs[trim];
+    const v1 = vs[vs.length - 1 - trim];
+
+    const corners = [
+      { x: cx + u0 * ux + v0 * vx, y: cy + u0 * uy + v0 * vy },
+      { x: cx + u1 * ux + v0 * vx, y: cy + u1 * uy + v0 * vy },
+      { x: cx + u1 * ux + v1 * vx, y: cy + u1 * uy + v1 * vy },
+      { x: cx + u0 * ux + v1 * vx, y: cy + u0 * uy + v1 * vy },
+    ];
+
+    for (const c of corners) {
+      c.x = Math.max(0, Math.min(1, c.x));
+      c.y = Math.max(0, Math.min(1, c.y));
     }
 
-    private scoreLine(line: { theta: number; rho: number }, targetTheta: number, angleThresh: number, distThresh: number): number {
-        const angDiff = Math.abs(((line.theta - targetTheta + Math.PI) % (Math.PI * 2)) - Math.PI);
-        const angleScore = Math.max(0, 1 - angDiff / angleThresh);
-        const distScore = Math.max(0, 1 - Math.abs(line.rho) / distThresh);
-        return angleScore * distScore;
-    }
+    return corners;
+  }
 
-    private intersection(l1: { theta: number; rho: number }, l2: { theta: number; rho: number }): Point | null {
-        const c1 = Math.cos(l1.theta);
-        const s1 = Math.sin(l1.theta);
-        const c2 = Math.cos(l2.theta);
-        const s2 = Math.sin(l2.theta);
+  /* ============================ Apply ============================ */
 
-        const det = c1 * s2 - s1 * c2;
-        if (Math.abs(det) < 1e-6) return null;
+  protected applyInternal(rt: RenderTarget2D, applyToScreen: boolean): RenderTarget2D {
+    const settings = this.settings as RayBoxPassSettings;
+    const { width, height } = this.readPixelsToBuffer(rt);
 
-        const x = (l1.rho * s2 - l2.rho * s1) / det;
-        const y = (l2.rho * c1 - l1.rho * c2) / det;
-        return { x, y };
-    }
+    const hits = this.findRayHits(
+      width,
+      height,
+      settings.threshold,
+      Math.max(64, settings.rayCount),
+      0.5
+    );
 
-    private computeBoxCorners(lines: (LineNormal | null)[]): Point[] {
-        const corners: Point[] = [];
-        const fallback: Point = { x: 0.5, y: 0.5 };
-        for (let i = 0; i < 4; i++) {
-            const l1 = lines[i];
-            const l2 = lines[(i + 1) % 4];
-            if (l1 && l2) {
-                const p = this.intersection(l1, l2);
-                corners.push(p ?? fallback);
-            } else {
-                corners.push(fallback);
-            }
-        }
-        return corners;
-    }
+    const corners = this.computeOBBCorners(hits);
 
-    private selectLines(lines: { theta: number; rho: number }[], settings: RayBoxPassSettings): (LineNormal | null)[] {
-        const targets = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
-        const results: (LineNormal | null)[] = [null, null, null, null];
+    // === FIXED Y MIRROR HERE ===
+    this.settings.uniforms.u_corners = [
+      corners[0].x, 1 - corners[0].y,
+      corners[1].x, 1 - corners[1].y,
+      corners[2].x, 1 - corners[2].y,
+      corners[3].x, 1 - corners[3].y,
+    ];
 
-        for (const line of lines) {
-            for (let i = 0; i < targets.length; i++) {
-                const score = this.scoreLine(line, targets[i], settings.angleThreshold, settings.distanceThreshold);
-                if (score > 0 && (!results[i] || score > results[i]!.score)) {
-                    results[i] = { ...line, score };
-                }
-            }
-        }
+    this.settings.uniforms.u_thickness = 1.5 / Math.max(width, height);
+    this.settings.uniforms.u_input = rt.texture;
 
-        return results;
-    }
+    this.executeProgram(
+      this.boxProgramInfo,
+      rt,
+      applyToScreen ? null : this.outputRenderTarget
+    );
 
-    private overlayBox(renderTargetIn: RenderTarget2D, corners: Point[]): void {
-        // ensure output matches input size
-        if (this.outputRenderTarget.framebufferInfo.width !== renderTargetIn.framebufferInfo.width ||
-            this.outputRenderTarget.framebufferInfo.height !== renderTargetIn.framebufferInfo.height) {
-            this.outputRenderTarget.resize(renderTargetIn.framebufferInfo.width, renderTargetIn.framebufferInfo.height);
-        }
-
-        this.executeProgram(this.boxProgramInfo, renderTargetIn, this.outputRenderTarget);
-    }
-
-    public applyInternal(renderTargetIn: RenderTarget2D, applyToScreen: boolean): RenderTarget2D {
-        const settings = this.settings as RayBoxPassSettings;
-        const { width, height } = this.readPixelsToBuffer(renderTargetIn);
-
-        const hits = this.findRayHits(width, height, settings.threshold, Math.max(4, Math.floor(settings.rayCount)));
-
-        const lines: { theta: number; rho: number }[] = [];
-        for (let i = 0; i < hits.length; i++) {
-            const a = hits[i];
-            const b = hits[(i + 1) % hits.length];
-            lines.push(this.lineFromPoints(a, b));
-        }
-
-        const selected = this.selectLines(lines, settings);
-        const corners = this.computeBoxCorners(selected);
-
-        // render overlay
-        this.executeProgram(this.boxProgramInfo, renderTargetIn, applyToScreen ? null : this.outputRenderTarget);
-        const uniformCorners = [
-            corners[0].x, corners[0].y,
-            corners[1].x, corners[1].y,
-            corners[2].x, corners[2].y,
-            corners[3].x, corners[3].y,
-        ];
-        const uniforms = {
-            u_corners: uniformCorners,
-            u_thickness: 1.5 / Math.max(width, height),
-            u_input: renderTargetIn.texture,
-        };
-        twgl.setUniforms(this.boxProgramInfo, uniforms);
-        twgl.drawBufferInfo(this.gl, this.quadBufferInfo);
-
-        return this.outputRenderTarget;
-    }
+    return this.outputRenderTarget;
+  }
 }
