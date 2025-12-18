@@ -1,7 +1,7 @@
 import * as twgl from 'twgl.js';
 import type { RenderTarget2D } from '../RenderTarget2D';
 import type { PassSettingsBase } from './PassSettingsBase';
-import fullscreenQuadVert from './shaders/fullscreen_quad.vert?raw'
+import fullscreenQuadVert from './fullscreen-quad.vert?raw'
 
 
 export abstract class PassBase {
