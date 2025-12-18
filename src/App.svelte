@@ -8,8 +8,8 @@
   import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
   import SobelSettings from './lib/ui/settings/SobelSettings.svelte'
   import type { SobelPassSettings } from './lib/cv/passes/sobel/SobelPassSettings'
-  import LowCutoffSettings from './lib/ui/settings/LowCutoffSettings.svelte'
-  import type { LowCutoffPassSettings } from './lib/cv/passes/low-cutoff/LowCutoffPassSettings'
+  import MagnatudeGateSettings from './lib/ui/settings/MagnatudeGateSettings.svelte'
+  import type { MagnatudeGatePassSettings } from './lib/cv/passes/magnatude-gate/MagnatudeGatePassSettings'
   import TemporalSettings from './lib/ui/settings/TemporalSettings.svelte'
   import type { TemporalPassSettings } from './lib/cv/passes/temporal/TemporalPassSettings'
   import type { PassBase } from './lib/cv/passes/PassBase'
@@ -20,7 +20,7 @@
     'rec709-luma': Rec709Settings,
     bilateral: BilateralSettings,
     sobel: SobelSettings,
-    'low-cutoff': LowCutoffSettings,
+    'magnatude-gate': MagnatudeGateSettings,
     temporal: TemporalSettings,
   }
 
@@ -155,12 +155,12 @@
             frontSettings={frontSettings as SobelPassSettings}
             rearSettings={rearSettings as SobelPassSettings}
           />
-        {:else if passDef.id === 'low-cutoff'}
+        {:else if passDef.id === 'magnatude-gate'}
           <svelte:component
             this={SettingsComponent}
             required={passDef.required}
-            frontSettings={frontSettings as LowCutoffPassSettings}
-            rearSettings={rearSettings as LowCutoffPassSettings}
+            frontSettings={frontSettings as MagnatudeGatePassSettings}
+            rearSettings={rearSettings as MagnatudeGatePassSettings}
           />
         {:else if passDef.id === 'temporal'}
           <svelte:component

@@ -1,10 +1,10 @@
 <script lang="ts">
   import SliderSetting from '../SliderSetting.svelte'
   import ToggleSetting from '../ToggleSetting.svelte'
-  import type { LowCutoffPassSettings } from '../../cv/passes/low-cutoff/LowCutoffPassSettings'
+  import type { MagnatudeGatePassSettings } from '../../cv/passes/magnatude-gate/MagnatudeGatePassSettings'
 
-  export let frontSettings: LowCutoffPassSettings
-  export let rearSettings: LowCutoffPassSettings | undefined
+  export let frontSettings: MagnatudeGatePassSettings
+  export let rearSettings: MagnatudeGatePassSettings | undefined
   export let required: boolean = false
 
   let enabled = frontSettings.enabled

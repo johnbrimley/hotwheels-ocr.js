@@ -5,8 +5,8 @@ import { BilateralPassSettings } from '../passes/bilateral/BilateralPassSettings
 import { Rec709LumPass } from '../passes/rec-709-luma/Rec709LumaPass'
 import { SobelPass } from '../passes/sobel/SobelPass'
 import { SobelPassSettings } from '../passes/sobel/SobelPassSettings'
-import { LowCutoffPass } from '../passes/low-cutoff/LowCutoffPass'
-import { LowCutoffPassSettings } from '../passes/low-cutoff/LowCutoffPassSettings'
+import { MagnatudeGatePass } from '../passes/magnatude-gate/MagnatudeGatePass'
+import { MagnatudeGatePassSettings } from '../passes/magnatude-gate/MagnatudeGatePassSettings'
 import { TemporalPass } from '../passes/temporal/TemporalPass'
 import { TemporalPassSettings } from '../passes/temporal/TemporalPassSettings'
 
@@ -40,9 +40,9 @@ export class BoundaryPipeline {
     sobelSettings.minEdge = 0.0
     const sobel = new SobelPass(gl, sobelSettings)
 
-    const lowCutoffSettings = new LowCutoffPassSettings()
-    lowCutoffSettings.threshold = 0.15
-    const lowCutoff = new LowCutoffPass(gl, lowCutoffSettings)
+    const magnatudeGateSettings = new MagnatudeGatePassSettings()
+    magnatudeGateSettings.threshold = 0.15
+    const magnatudeGate = new MagnatudeGatePass(gl, magnatudeGateSettings)
 
     const temporalSettings = new TemporalPassSettings()
     temporalSettings.enabled = true
@@ -52,7 +52,7 @@ export class BoundaryPipeline {
       { id: 'rec709-luma', label: 'Rec709 Luma', required: true, pass: rec709 },
       { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
       { id: 'sobel', label: 'Sobel', required: false, pass: sobel },
-      { id: 'low-cutoff', label: 'Low Cutoff', required: false, pass: lowCutoff },
+      { id: 'magnatude-gate', label: 'Magnitude Gate', required: false, pass: magnatudeGate },
       { id: 'temporal', label: 'Temporal Median', required: false, pass: temporal },
     ]
     this.passMap = new Map(this.passes.map((p) => [p.id, p]))
