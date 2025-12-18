@@ -57,10 +57,11 @@ export class RayBoxPass extends PassBase {
       for (let ox = -1; ox <= 1; ox++) {
         const sx = Math.max(0, Math.min(w - 1, xi + ox));
         const syImg = Math.max(0, Math.min(h - 1, yi + oy));
-        const sy = (h - 1) - syImg; // Y FLIP HERE
+        const sy = (h - 1) - syImg; // Y FLIP
 
         const idx = (sy * w + sx) * this.pixelChannels;
-        best = Math.max(best, this.pixelBuffer[idx] / 255);
+        const v = this.pixelBuffer[idx] / 255;
+        if (v > best) best = v;
       }
     }
 
@@ -96,7 +97,7 @@ export class RayBoxPass extends PassBase {
         if (this.sampleMax3x3(x, y, width, height) >= threshold) {
           hits.push({
             x: x / (width - 1),
-            y: y / (height - 1), // image-space (top-left origin)
+            y: y / (height - 1), // image-space (top-left)
           });
           break;
         }
@@ -108,7 +109,7 @@ export class RayBoxPass extends PassBase {
 
   /* ============================ PCA Box Fit ============================ */
 
-  private computeOBBCorners(points: Point[]): Point[] {
+  private computeOBBCorners(points: Point[], trimFraction: number): Point[] {
     if (points.length < 4) {
       const s = 0.25;
       return [
@@ -119,11 +120,13 @@ export class RayBoxPass extends PassBase {
       ];
     }
 
+    // centroid
     let cx = 0, cy = 0;
     for (const p of points) { cx += p.x; cy += p.y; }
     cx /= points.length;
     cy /= points.length;
 
+    // covariance
     let sxx = 0, sxy = 0, syy = 0;
     for (const p of points) {
       const x = p.x - cx;
@@ -141,13 +144,15 @@ export class RayBoxPass extends PassBase {
     let ux = sxy;
     let uy = lambda - sxx;
     const len = Math.hypot(ux, uy) || 1;
-    ux /= len; uy /= len;
+    ux /= len;
+    uy /= len;
 
     const vx = -uy;
     const vy = ux;
 
     const us: number[] = [];
     const vs: number[] = [];
+
     for (const p of points) {
       const dx = p.x - cx;
       const dy = p.y - cy;
@@ -158,7 +163,7 @@ export class RayBoxPass extends PassBase {
     us.sort((a, b) => a - b);
     vs.sort((a, b) => a - b);
 
-    const trim = Math.floor(points.length * 0.12);
+    const trim = Math.floor(us.length * Math.min(Math.max(trimFraction, 0), 0.45));
     const u0 = us[trim];
     const u1 = us[us.length - 1 - trim];
     const v0 = vs[trim];
@@ -189,13 +194,13 @@ export class RayBoxPass extends PassBase {
       width,
       height,
       settings.threshold,
-      Math.max(64, settings.rayCount),
-      0.5
+      Math.max(32, settings.rayCount),
+      settings.step
     );
 
-    const corners = this.computeOBBCorners(hits);
+    const corners = this.computeOBBCorners(hits, settings.trimFraction);
 
-    // === FIXED Y MIRROR HERE ===
+    // Flip Y ONCE when sending to shader
     this.settings.uniforms.u_corners = [
       corners[0].x, 1 - corners[0].y,
       corners[1].x, 1 - corners[1].y,
