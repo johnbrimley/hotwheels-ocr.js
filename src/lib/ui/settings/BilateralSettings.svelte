@@ -3,37 +3,39 @@
   import ToggleSetting from '../ToggleSetting.svelte'
   import type { BilateralPassSettings } from '../../cv/passes/bilateral/BilateralPassSettings'
 
-  export let frontSettings: BilateralPassSettings
-  export let rearSettings: BilateralPassSettings | undefined
+  export let settings: BilateralPassSettings
   export let required: boolean = false
 
-  let enabled = frontSettings.enabled
-  let kernelRadius = frontSettings.kernelRadius
-  let sigmaSpatial = frontSettings.sigmaSpatial
-  let sigmaRange = frontSettings.sigmaRange
+  let enabled = settings.enabled
+  let kernelRadius = settings.kernelRadius
+  let sigmaSpatial = settings.sigmaSpatial
+  let sigmaRange = settings.sigmaRange
+
+  $: if (settings) {
+    enabled = settings.enabled
+    kernelRadius = settings.kernelRadius
+    sigmaSpatial = settings.sigmaSpatial
+    sigmaRange = settings.sigmaRange
+  }
 
   function setEnabled(value: boolean): void {
     enabled = value
-    frontSettings.enabled = value
-    if (rearSettings) rearSettings.enabled = value
+    settings.enabled = value
   }
 
   function setKernelRadius(value: number): void {
     kernelRadius = value
-    frontSettings.kernelRadius = value
-    if (rearSettings) rearSettings.kernelRadius = value
+    settings.kernelRadius = value
   }
 
   function setSigmaSpatial(value: number): void {
     sigmaSpatial = value
-    frontSettings.sigmaSpatial = value
-    if (rearSettings) rearSettings.sigmaSpatial = value
+    settings.sigmaSpatial = value
   }
 
   function setSigmaRange(value: number): void {
     sigmaRange = value
-    frontSettings.sigmaRange = value
-    if (rearSettings) rearSettings.sigmaRange = value
+    settings.sigmaRange = value
   }
 </script>
 

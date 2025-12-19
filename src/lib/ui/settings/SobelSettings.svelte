@@ -3,44 +3,46 @@
   import ToggleSetting from '../ToggleSetting.svelte'
   import type { SobelPassSettings } from '../../cv/passes/sobel/SobelPassSettings'
 
-  export let frontSettings: SobelPassSettings
-  export let rearSettings: SobelPassSettings | undefined
+  export let settings: SobelPassSettings
   export let required: boolean = false
 
-  let enabled = frontSettings.enabled
-  let kernelRadius = frontSettings.kernelRadius
-  let directionBias = frontSettings.directionBias
-  let edgeGain = frontSettings.edgeGain
-  let minEdge = frontSettings.minEdge
+  let enabled = settings.enabled
+  let kernelRadius = settings.kernelRadius
+  let directionBias = settings.directionBias
+  let edgeGain = settings.edgeGain
+  let minEdge = settings.minEdge
+
+  $: if (settings) {
+    enabled = settings.enabled
+    kernelRadius = settings.kernelRadius
+    directionBias = settings.directionBias
+    edgeGain = settings.edgeGain
+    minEdge = settings.minEdge
+  }
 
   function setEnabled(value: boolean): void {
     enabled = value
-    frontSettings.enabled = value
-    if (rearSettings) rearSettings.enabled = value
+    settings.enabled = value
   }
 
   function setKernelRadius(value: number): void {
     kernelRadius = value
-    frontSettings.kernelRadius = value
-    if (rearSettings) rearSettings.kernelRadius = value
+    settings.kernelRadius = value
   }
 
   function setDirectionBias(value: number): void {
     directionBias = value
-    frontSettings.directionBias = value
-    if (rearSettings) rearSettings.directionBias = value
+    settings.directionBias = value
   }
 
   function setEdgeGain(value: number): void {
     edgeGain = value
-    frontSettings.edgeGain = value
-    if (rearSettings) rearSettings.edgeGain = value
+    settings.edgeGain = value
   }
 
   function setMinEdge(value: number): void {
     minEdge = value
-    frontSettings.minEdge = value
-    if (rearSettings) rearSettings.minEdge = value
+    settings.minEdge = value
   }
 </script>
 
@@ -82,4 +84,3 @@
     on:input={(e) => setMinEdge(e.detail.value)}
   />
 </div>
-

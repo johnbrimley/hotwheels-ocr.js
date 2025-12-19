@@ -3,23 +3,25 @@
   import ToggleSetting from '../ToggleSetting.svelte'
   import type { MagnatudeGatePassSettings } from '../../cv/passes/magnatude-gate/MagnatudeGatePassSettings'
 
-  export let frontSettings: MagnatudeGatePassSettings
-  export let rearSettings: MagnatudeGatePassSettings | undefined
+  export let settings: MagnatudeGatePassSettings
   export let required: boolean = false
 
-  let enabled = frontSettings.enabled
-  let threshold = frontSettings.threshold
+  let enabled = settings.enabled
+  let threshold = settings.threshold
+
+  $: if (settings) {
+    enabled = settings.enabled
+    threshold = settings.threshold
+  }
 
   function setEnabled(value: boolean): void {
     enabled = value
-    frontSettings.enabled = value
-    if (rearSettings) rearSettings.enabled = value
+    settings.enabled = value
   }
 
   function setThreshold(value: number): void {
     threshold = value
-    frontSettings.threshold = value
-    if (rearSettings) rearSettings.threshold = value
+    settings.threshold = value
   }
 </script>
 

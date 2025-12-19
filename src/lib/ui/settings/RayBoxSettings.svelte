@@ -3,40 +3,42 @@
   import ToggleSetting from '../ToggleSetting.svelte'
   import type { RayBoxPassSettings } from '../../cv/passes/ray-box/RayBoxPassSettings'
 
-  export let frontSettings: RayBoxPassSettings
-  export let rearSettings: RayBoxPassSettings | undefined
+  export let settings: RayBoxPassSettings
   export let required: boolean = false
 
-  let enabled = frontSettings.enabled
-  let threshold = frontSettings.threshold
-  let rayCount = frontSettings.rayCount
-  let step = frontSettings.step
-  let trimFraction = frontSettings.trimFraction
+  let enabled = settings.enabled
+  let threshold = settings.threshold
+  let rayCount = settings.rayCount
+  let step = settings.step
+  let trimFraction = settings.trimFraction
 
-  function mirror<T>(fn: (settings: RayBoxPassSettings, value: T) => void, value: T) {
-    fn(frontSettings, value)
-    if (rearSettings) fn(rearSettings, value)
+  $: if (settings) {
+    enabled = settings.enabled
+    threshold = settings.threshold
+    rayCount = settings.rayCount
+    step = settings.step
+    trimFraction = settings.trimFraction
   }
 
   function setEnabled(value: boolean): void {
     enabled = value
-    mirror((s, v) => (s.enabled = v), value)
+    settings.enabled = value
   }
   function setThreshold(value: number): void {
     threshold = value
-    mirror((s, v) => (s.threshold = v), value)
+    settings.threshold = value
   }
   function setRayCount(value: number): void {
     rayCount = value
-    mirror((s, v) => (s.rayCount = v), value)
+    settings.rayCount = value
   }
   function setStep(value: number): void {
     step = value
-    mirror((s, v) => (s.step = v), value)
+    settings.step = value
   }
   function setTrimFraction(value: number): void {
     trimFraction = value
-    mirror((s, v) => (s.trimFraction = v), value)
+    settings.trimFraction = value
   }
 </script>
 

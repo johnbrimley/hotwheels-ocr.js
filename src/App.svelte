@@ -16,6 +16,9 @@
   import type { RayBoxPassSettings } from './lib/cv/passes/ray-box/RayBoxPassSettings'
   import type { PassBase } from './lib/cv/passes/PassBase'
   import FpsCounter from './lib/ui/FpsCounter.svelte'
+  import Toast from './lib/ui/Toast.svelte'
+  import frontDefaults from './lib/config/front-settings.json'
+  import rearDefaults from './lib/config/rear-settings.json'
 
   type InputOption = { id: string; label: string }
 
@@ -36,6 +39,8 @@
   let selectedFrontInputId = ''
   let selectedRearInputId = ''
 
+  let selectedSide: 'front' | 'rear' = 'front'
+
   let frontCanvas: HTMLCanvasElement | null = null
   let rearCanvas: HTMLCanvasElement | null = null
 
@@ -47,6 +52,8 @@
   let running = false
   let frameInFlight = false
   let fpsCounter: { measure: () => void } | null = null
+  let toastOpen = false
+  let toastMessage = ''
 
   function refreshInputOptions(): void {
     inputOptions = Array.from(inputContexts.entries()).map(([id, ctx]) => ({
@@ -68,6 +75,69 @@
   function getPassSettings(passId: string, boundary: BoundaryPipeline | null): PassBase['settings'] | null {
     const pass = boundary?.getPass(passId)
     return pass ? pass.settings : null
+  }
+
+  function applyDefaults(boundary: BoundaryPipeline, defaults: any): void {
+    const perPass = defaults?.passes ?? {}
+    for (const entry of boundary.passes) {
+      const cfg = perPass[entry.id]
+      if (!cfg) continue
+      if (typeof cfg.enabled === 'boolean') {
+        entry.pass.enabled = cfg.enabled
+      }
+      for (const [key, value] of Object.entries(cfg)) {
+        if (key === 'enabled') continue
+        if (key in entry.pass.settings) {
+          ;(entry.pass.settings as any)[key] = value
+        }
+      }
+    }
+  }
+
+  function serializeBoundary(boundary: BoundaryPipeline): any {
+    const result: Record<string, any> = {}
+    for (const entry of boundary.passes) {
+      const settings: Record<string, any> = { enabled: entry.pass.enabled }
+      const s = entry.pass.settings as any
+      switch (entry.id) {
+        case 'bilateral':
+          settings.kernelRadius = s.kernelRadius
+          settings.sigmaSpatial = s.sigmaSpatial
+          settings.sigmaRange = s.sigmaRange
+          break
+        case 'sobel':
+          settings.kernelRadius = s.kernelRadius
+          settings.directionBias = s.directionBias
+          settings.edgeGain = s.edgeGain
+          settings.minEdge = s.minEdge
+          break
+        case 'magnatude-gate':
+          settings.threshold = s.threshold
+          break
+        case 'temporal':
+          break
+        case 'ray-box':
+          settings.threshold = s.threshold
+          settings.rayCount = s.rayCount
+          settings.step = s.step
+          settings.trimFraction = s.trimFraction
+          break
+        case 'rec709-luma':
+        default:
+          break
+      }
+      result[entry.id] = settings
+    }
+    return { passes: result }
+  }
+
+  async function exportSettings(side: 'front' | 'rear'): Promise<void> {
+    const boundary = side === 'front' ? frontBoundary : rearBoundary
+    if (!boundary) return
+    const json = JSON.stringify(serializeBoundary(boundary), null, 2)
+    await navigator.clipboard.writeText(json)
+    toastMessage = `Exported ${side} settings to clipboard`
+    toastOpen = true
   }
 
   async function renderSelected(boundary: BoundaryPipeline | null, inputId: string): Promise<void> {
@@ -119,6 +189,10 @@
 
       frontBoundary = new BoundaryPipeline(frontGl)
       rearBoundary = new BoundaryPipeline(rearGl)
+
+      if (frontBoundary) applyDefaults(frontBoundary, frontDefaults)
+      if (rearBoundary) applyDefaults(rearBoundary, rearDefaults)
+
       passList = frontBoundary.passes
       selectedPassId = passList[0]?.id ?? ''
 
@@ -136,55 +210,51 @@
 
 <main class="app">
   <section class="controls">
-    <PassTabs
-      passes={passList.map((p) => ({ id: p.id, label: p.label }))}
-      {selectedPassId}
-      on:select={(e) => (selectedPassId = e.detail.passId)}
-    />
+    <div class="controlRow">
+      <div class="sideSwitcher" role="group" aria-label="Side selector">
+        <button
+          type="button"
+          class:sideActive={selectedSide === 'front'}
+          on:click={() => (selectedSide = 'front')}
+        >
+          Front
+        </button>
+        <button
+          type="button"
+          class:sideActive={selectedSide === 'rear'}
+          on:click={() => (selectedSide = 'rear')}
+        >
+          Rear
+        </button>
+      </div>
+
+      <PassTabs
+        passes={passList.map((p) => ({ id: p.id, label: p.label }))}
+        {selectedPassId}
+        on:select={(e) => (selectedPassId = e.detail.passId)}
+      />
+
+      <button class="exportButton" type="button" on:click={() => exportSettings(selectedSide)}>Export</button>
+    </div>
 
     {#if selectedPassId}
       {@const passDef = passList.find((p) => p.id === selectedPassId)}
       {@const SettingsComponent = passDef ? passSettingsComponents[passDef.id] : null}
-      {@const frontSettings = passDef ? getPassSettings(passDef.id, frontBoundary) : null}
-      {@const rearSettings = passDef ? getPassSettings(passDef.id, rearBoundary) : null}
-      {#if passDef && SettingsComponent && frontSettings}
+      {@const activeBoundary = selectedSide === 'front' ? frontBoundary : rearBoundary}
+      {@const settings = passDef ? getPassSettings(passDef.id, activeBoundary) : null}
+      {#if passDef && SettingsComponent && settings}
         {#if passDef.id === 'bilateral'}
-          <svelte:component
-            this={SettingsComponent}
-            required={passDef.required}
-            frontSettings={frontSettings as BilateralPassSettings}
-            rearSettings={rearSettings as BilateralPassSettings}
-          />
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as BilateralPassSettings} />
         {:else if passDef.id === 'sobel'}
-          <svelte:component
-            this={SettingsComponent}
-            required={passDef.required}
-            frontSettings={frontSettings as SobelPassSettings}
-            rearSettings={rearSettings as SobelPassSettings}
-          />
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as SobelPassSettings} />
         {:else if passDef.id === 'magnatude-gate'}
-          <svelte:component
-            this={SettingsComponent}
-            required={passDef.required}
-            frontSettings={frontSettings as MagnatudeGatePassSettings}
-            rearSettings={rearSettings as MagnatudeGatePassSettings}
-          />
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as MagnatudeGatePassSettings} />
         {:else if passDef.id === 'temporal'}
-          <svelte:component
-            this={SettingsComponent}
-            required={passDef.required}
-            frontSettings={frontSettings as TemporalPassSettings}
-            rearSettings={rearSettings as TemporalPassSettings}
-          />
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as TemporalPassSettings} />
         {:else if passDef.id === 'ray-box'}
-          <svelte:component
-            this={SettingsComponent}
-            required={passDef.required}
-            frontSettings={frontSettings as RayBoxPassSettings}
-            rearSettings={rearSettings as RayBoxPassSettings}
-          />
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as RayBoxPassSettings} />
         {:else}
-          <svelte:component this={SettingsComponent} />
+          <svelte:component this={SettingsComponent} required={passDef.required} />
         {/if}
       {/if}
     {/if}
@@ -222,6 +292,7 @@
     <div class="errorBanner" role="alert">{errorMessage}</div>
   {/if}
   <FpsCounter bind:this={fpsCounter} />
+  <Toast message={toastMessage} bind:open={toastOpen} />
 </main>
 
 <style>
@@ -241,6 +312,34 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .controlRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .sideSwitcher button {
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(0, 0, 0, 0.35);
+    color: inherit;
+    border-radius: 10px;
+  }
+
+  .sideSwitcher .sideActive {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  .exportButton {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.35);
+    color: inherit;
   }
 
   :global(.passBar) {
