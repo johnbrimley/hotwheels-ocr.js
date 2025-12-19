@@ -154,7 +154,7 @@
 
     const bitmap = (await (ctx.imageCapture as any).grabFrame()) as ImageBitmap
     try {
-      await boundary.pipeline.render(bitmap)
+      await boundary.render(bitmap)
     } finally {
       bitmap.close()
     }
@@ -186,16 +186,13 @@
     try {
       await initializeInputs()
 
-      const frontGl = frontCanvas?.getContext('webgl2')
-      const rearGl = rearCanvas?.getContext('webgl2')
-
-      if (!frontGl || !rearGl) {
-        errorMessage = 'WebGL2 not available for one or both canvases.'
+      if (!frontCanvas || !rearCanvas) {
+        errorMessage = 'Canvas not available for one or both views.'
         return
       }
 
-      frontBoundary = new BoundaryPipeline(frontGl)
-      rearBoundary = new BoundaryPipeline(rearGl)
+      frontBoundary = new BoundaryPipeline(frontCanvas)
+      rearBoundary = new BoundaryPipeline(rearCanvas)
 
       if (frontBoundary) applyDefaults(frontBoundary, frontDefaults)
       if (rearBoundary) applyDefaults(rearBoundary, rearDefaults)

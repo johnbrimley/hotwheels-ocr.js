@@ -6,11 +6,14 @@ import boxOverlayFrag from './box-overlay.frag?raw';
 
 type Point = { x: number; y: number };
 
+export type RayBoxBox = { corners: Point[] };
+
 export class RayBoxPass extends PassBase {
   private boxProgramInfo: twgl.ProgramInfo;
   private outputRenderTarget: RenderTarget2D;
   private pixelBuffer: Uint8Array | null = null;
   private pixelChannels = 0;
+  public lastBox: RayBoxBox | null = null;
 
   constructor(gl: WebGL2RenderingContext, settings: RayBoxPassSettings) {
     super(gl, settings);
@@ -199,6 +202,7 @@ export class RayBoxPass extends PassBase {
     );
 
     const corners = this.computeOBBCorners(hits, settings.trimFraction);
+    this.lastBox = { corners };
 
     // Flip Y ONCE when sending to shader
     this.settings.uniforms.u_corners = [

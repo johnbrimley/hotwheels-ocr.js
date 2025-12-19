@@ -23,8 +23,8 @@ export abstract class PassBase {
     public apply(renderTargetIn: RenderTarget2D): RenderTarget2D{
         return this.applyInternal(renderTargetIn, false)!;
     }
-    public applyToScreen(renderTargetIn: RenderTarget2D): void{
-        this.applyInternal(renderTargetIn, true);
+    public applyToScreen(renderTargetIn: RenderTarget2D): RenderTarget2D | null{
+        return this.applyInternal(renderTargetIn, true);
     }
 
     protected executeProgram(programInfo: twgl.ProgramInfo, renderTargetIn: RenderTarget2D, renderTargetOut: RenderTarget2D | null, outboundTargetHasExplicitSize: boolean = false): void {
