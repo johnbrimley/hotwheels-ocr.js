@@ -7,17 +7,19 @@
   export let required: boolean = false
 
   let enabled = settings.enabled
-  let kernelRadius = settings.kernelRadius
-  let directionBias = settings.directionBias
-  let edgeGain = settings.edgeGain
-  let minEdge = settings.minEdge
+  let thetaRadius = settings.thetaRadius
+  let rhoRadius = settings.rhoRadius
+  let magnitudeScale = settings.magnitudeScale
+  let lengthScale = settings.lengthScale
+  let diagonalWeakening = settings.diagonalWeaking
 
   $: if (settings) {
     enabled = settings.enabled
-    kernelRadius = settings.kernelRadius
-    directionBias = settings.directionBias
-    edgeGain = settings.edgeGain
-    minEdge = settings.minEdge
+    thetaRadius = settings.thetaRadius
+    rhoRadius = settings.rhoRadius
+    magnitudeScale = settings.magnitudeScale
+    lengthScale = settings.lengthScale
+    diagonalWeakening = settings.diagonalWeaking
   }
 
   function setEnabled(value: boolean): void {
@@ -25,24 +27,29 @@
     settings.enabled = value
   }
 
-  function setKernelRadius(value: number): void {
-    kernelRadius = value
-    settings.kernelRadius = value
+  function setThetaRadius(value: number): void {
+    thetaRadius = value
+    settings.thetaRadius = value
   }
 
-  function setDirectionBias(value: number): void {
-    directionBias = value
-    settings.directionBias = value
+  function setRhoRadius(value: number): void {
+    rhoRadius = value
+    settings.rhoRadius = value
   }
 
-  function setEdgeGain(value: number): void {
-    edgeGain = value
-    settings.edgeGain = value
+  function setMagnitudeScale(value: number): void {
+    magnitudeScale = value
+    settings.magnitudeScale = value
   }
 
-  function setMinEdge(value: number): void {
-    minEdge = value
-    settings.minEdge = value
+  function setLengthScale(value: number): void {
+    lengthScale = value
+    settings.lengthScale = value
+  }
+
+  function setDiagonalWeakening(value: number): void {
+    diagonalWeakening = value
+    settings.diagonalWeaking = value
   }
 </script>
 
@@ -50,37 +57,44 @@
   {#if !required}
     <ToggleSetting label="Enabled" checked={enabled} on:change={(e) => setEnabled(e.detail.checked)} />
   {/if}
-
   <SliderSetting
-    label="Kernel Radius"
-    min={1}
-    max={2}
+    label="Theta Radius"
+    min={0}
+    max={10}
     step={1}
-    value={kernelRadius}
-    on:input={(e) => setKernelRadius(e.detail.value)}
+    value={thetaRadius}
+    on:input={(e) => setThetaRadius(e.detail.value)}
   />
   <SliderSetting
-    label="Direction Bias"
-    min={-1}
-    max={1}
-    step={0.1}
-    value={directionBias}
-    on:input={(e) => setDirectionBias(e.detail.value)}
-  />
-  <SliderSetting
-    label="Edge Gain"
+    label="Rho Radius"
     min={0}
-    max={8}
-    step={0.1}
-    value={edgeGain}
-    on:input={(e) => setEdgeGain(e.detail.value)}
+    max={10}
+    step={1}
+    value={rhoRadius}
+    on:input={(e) => setRhoRadius(e.detail.value)}
   />
   <SliderSetting
-    label="Min Edge"
+    label="Magnitude Scale"
+    min={0}
+    max={5}
+    step={0.05}
+    value={magnitudeScale}
+    on:input={(e) => setMagnitudeScale(e.detail.value)}
+  />
+  <SliderSetting
+    label="Length Scale"
+    min={0}
+    max={5}
+    step={0.05}
+    value={lengthScale}
+    on:input={(e) => setLengthScale(e.detail.value)}
+  />
+  <SliderSetting
+    label="Diagonal Weakening"
     min={0}
     max={1}
-    step={0.01}
-    value={minEdge}
-    on:input={(e) => setMinEdge(e.detail.value)}
+    step={0.005}
+    value={diagonalWeakening}
+    on:input={(e) => setDiagonalWeakening(e.detail.value)}
   />
 </div>

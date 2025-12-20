@@ -28,6 +28,10 @@ export class RenderTarget2D{
         return new RenderTarget2D(gl, gl.RGBA8, gl.RGBA, minMag);
     }
 
+    static createRGB8(gl: WebGL2RenderingContext, minMag: number = gl.LINEAR): RenderTarget2D{
+        return new RenderTarget2D(gl, gl.RGB8, gl.RGB, minMag);
+    }
+
     static createR8(gl: WebGL2RenderingContext, minMag: number = gl.LINEAR): RenderTarget2D{
         return new RenderTarget2D(gl, gl.R8, gl.RED, minMag);
     }

@@ -1,31 +1,42 @@
 import { PassSettingsBase } from "../PassSettingsBase";
 
+// Uniforms remain for API compatibility; shader ignores them.
 export class SobelPassSettings extends PassSettingsBase {
-    public get kernelRadius(): number {
-        return this.uniforms['u_kernelRadius'];
+    // thetaRadius, rhoRadius, magnatudeScale, lengthScale
+    private _thetaRadius: number = 1;
+    private _rhoRadius: number = 1;
+    private _magnitudeScale: number = 1.0;
+    private _lengthScale: number = 1.0;
+
+    public get thetaRadius(): number {
+        return this._thetaRadius;
     }
-    public set kernelRadius(value: number) {
-        this.uniforms['u_kernelRadius'] = value;
+    public set thetaRadius(value: number) {
+        this._thetaRadius = value;
+    }
+    public get rhoRadius(): number {
+        return this._rhoRadius;
+    }
+    public set rhoRadius(value: number) {
+        this._rhoRadius = value;
+    }
+    public get magnitudeScale(): number {
+        return this._magnitudeScale;
+    }
+    public set magnitudeScale(value: number) {
+        this._magnitudeScale = value;
+    }
+    public get lengthScale(): number {
+        return this._lengthScale;
+    }
+    public set lengthScale(value: number) {
+        this._lengthScale = value;
+    }
+    public get diagonalWeaking(): number {
+        return this.uniforms['u_diagonalWeakening'];
+    }
+    public set diagonalWeaking(value: number) {
+        this.uniforms['u_diagonalWeakening'] = value;
     }
 
-    public get directionBias(): number {
-        return this.uniforms['u_directionBias'];
-    }
-    public set directionBias(value: number) {
-        this.uniforms['u_directionBias'] = value;
-    }
-
-    public get edgeGain(): number {
-        return this.uniforms['u_edgeGain'];
-    }
-    public set edgeGain(value: number) {
-        this.uniforms['u_edgeGain'] = value;
-    }
-
-    public get minEdge(): number {
-        return this.uniforms['u_minEdge'];
-    }
-    public set minEdge(value: number) {
-        this.uniforms['u_minEdge'] = value;
-    }
 }
