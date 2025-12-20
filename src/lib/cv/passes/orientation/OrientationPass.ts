@@ -15,11 +15,8 @@ export class OrientationPass extends PassBase {
     }
 
     public applyInternal(renderTargetIn: RenderTarget2D, applyToScreen: boolean): RenderTarget2D {
-        if (!renderTargetIn.isR8 && !renderTargetIn.isRGBA8) {
-            throw new Error('OrientationPass expects R8 or RGBA8 render targets');
-        }
-        if (renderTargetIn.isRGBA8 && this.outputRenderTarget.isR8) {
-            this.outputRenderTarget = RenderTarget2D.createRGBA8(this.gl);
+        if (!renderTargetIn.isR8) {
+            throw new Error('OrientationPass expects R8 render targets');
         }
         this.executeProgram(this.programInfo, renderTargetIn, applyToScreen ? null : this.outputRenderTarget);
         return this.outputRenderTarget;

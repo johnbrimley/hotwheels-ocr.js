@@ -10,7 +10,7 @@ export class BilateralPass extends PassBase {
     constructor(gl: WebGL2RenderingContext, settings: BilateralPassSettings) {
         super(gl, settings);
         this.bilateralProgramInfo = this.createProgramInfo(bilateralFrag);
-        this.outputRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.outputRenderTarget = RenderTarget2D.createR8(gl);
     }
 
     public applyInternal(renderTargetIn: RenderTarget2D, applyToScreen: boolean): RenderTarget2D {
