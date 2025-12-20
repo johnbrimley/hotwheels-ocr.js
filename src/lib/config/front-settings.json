@@ -8,32 +8,22 @@
       "flipX": true,
       "flipY": false
     },
-    "bilateral": {
-      "enabled": true,
-      "kernelRadius": 5,
-      "sigmaSpatial": 1.5,
-      "sigmaRange": 0.5
-    },
-    "sobel": {
-      "enabled": true,
-      "kernelRadius": 2,
-      "directionBias": -0.1,
-      "edgeGain": 0.7,
-      "minEdge": 0
-    },
-    "magnatude-gate": {
-      "enabled": true,
-      "threshold": 0.035
-    },
     "temporal": {
       "enabled": true
     },
-    "ray-box": {
+    "bilateral": {
       "enabled": true,
-      "threshold": 0.06,
-      "rayCount": 256,
-      "step": 0.25,
-      "trimFraction": 0.06
+      "kernelRadius": 2,
+      "sigmaSpatial": 2.0,
+      "sigmaRange": 0.1
+    },
+    "sobel": {
+      "enabled": true,
+      "sigmaSmall": 1.4,
+      "sigmaLarge": 2.8
+    },
+    "ray-box": {
+      "enabled": false
     }
   }
 }

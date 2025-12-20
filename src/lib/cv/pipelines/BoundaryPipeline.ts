@@ -1,18 +1,17 @@
-import { ComputerVisionPipeline } from '../ComputerVisionPipeline'
-import type { PassBase } from '../passes/PassBase'
-import { BilateralPass } from '../passes/bilateral/BilateralPass'
-import { BilateralPassSettings } from '../passes/bilateral/BilateralPassSettings'
-import { Rec709LumPass } from '../passes/rec-709-luma/Rec709LumaPass'
-import { OrientationPass } from '../passes/orientation/OrientationPass'
-import { OrientationPassSettings } from '../passes/orientation/OrientationPassSettings'
-import { StructurePass } from '../passes/structure/StructurePass'
-import { StructurePassSettings } from '../passes/structure/StructurePassSettings'
-import { MagnatudeGatePass } from '../passes/magnatude-gate/MagnatudeGatePass'
-import { MagnatudeGatePassSettings } from '../passes/magnatude-gate/MagnatudeGatePassSettings'
-import { TemporalPass } from '../passes/temporal/TemporalPass'
-import { TemporalPassSettings } from '../passes/temporal/TemporalPassSettings'
-import { RayBoxPass, type RayBoxBox } from '../passes/ray-box/RayBoxPass'
-import { RayBoxPassSettings } from '../passes/ray-box/RayBoxPassSettings'
+import { ComputerVisionPipeline } from "../ComputerVisionPipeline";
+import type { PassBase } from "../passes/PassBase";
+import { BilateralPass } from "../passes/bilateral/BilateralPass";
+import { BilateralPassSettings } from "../passes/bilateral/BilateralPassSettings";
+import { Rec709LumPass } from "../passes/rec-709-luma/Rec709LumaPass";
+import { OrientationPass } from "../passes/orientation/OrientationPass";
+import { OrientationPassSettings } from "../passes/orientation/OrientationPassSettings";
+import { StructurePass } from "../passes/structure/StructurePass";
+import { StructurePassSettings } from "../passes/structure/StructurePassSettings";
+import { TemporalPass } from "../passes/temporal/TemporalPass";
+import { TemporalPassSettings } from "../passes/temporal/TemporalPassSettings";
+import { RayBoxPass } from "../passes/ray-box/RayBoxPass";
+import { RayBoxPassSettings } from "../passes/ray-box/RayBoxPassSettings";
+import type { Box } from "../../geometry/Box";
 
 export type BoundaryPipelinePass = {
   id: string
@@ -21,7 +20,7 @@ export type BoundaryPipelinePass = {
   pass: PassBase
 }
 
-export type BoundaryOutput = { box: RayBoxBox | null }
+export type BoundaryOutput = { box: Box | null }
 
 export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
   public readonly passes: BoundaryPipelinePass[]
@@ -38,26 +37,20 @@ export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
     orientationSettings.flipY = false
     const orientation = new OrientationPass(this.gl, orientationSettings)
 
+    const temporalSettings = new TemporalPassSettings()
+    temporalSettings.enabled = true
+    const temporal = new TemporalPass(this.gl, temporalSettings)
+
     const bilateralSettings = new BilateralPassSettings()
     bilateralSettings.kernelRadius = 2
     bilateralSettings.sigmaSpatial = 2.0
     bilateralSettings.sigmaRange = 0.1
     const bilateral = new BilateralPass(this.gl, bilateralSettings)
 
-    const sobelSettings = new StructurePassSettings()
-    sobelSettings.kernelRadius = 1
-    sobelSettings.directionBias = 0.0
-    sobelSettings.edgeGain = 1.0
-    sobelSettings.minEdge = 0.0
-    const sobel = new StructurePass(this.gl, sobelSettings)
-
-    const magnatudeGateSettings = new MagnatudeGatePassSettings()
-    magnatudeGateSettings.threshold = 0.15
-    const magnatudeGate = new MagnatudeGatePass(this.gl, magnatudeGateSettings)
-
-    const temporalSettings = new TemporalPassSettings()
-    temporalSettings.enabled = true
-    const temporal = new TemporalPass(this.gl, temporalSettings)
+    const structureSettings = new StructurePassSettings()
+    structureSettings.sigmaSmall = 1.4
+    structureSettings.sigmaLarge = 2.8
+    const structure = new StructurePass(this.gl, structureSettings)
 
     const rayBoxSettings = new RayBoxPassSettings()
     rayBoxSettings.threshold = 0.12
@@ -69,10 +62,9 @@ export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
     this.passes = [
       { id: 'rec709-luma', label: 'Rec709 Luma', required: true, pass: rec709 },
       { id: 'orientation', label: 'Orientation', required: false, pass: orientation },
-      { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
-      { id: 'sobel', label: 'Sobel', required: false, pass: sobel },
-      { id: 'magnatude-gate', label: 'Magnitude Gate', required: false, pass: magnatudeGate },
       { id: 'temporal', label: 'Temporal Median', required: false, pass: temporal },
+      { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
+      { id: 'sobel', label: 'Structure', required: false, pass: structure },
       { id: 'ray-box', label: 'Ray Box', required: false, pass: this.rayBoxPass },
     ]
     this.passMap = new Map(this.passes.map((p) => [p.id, p]))

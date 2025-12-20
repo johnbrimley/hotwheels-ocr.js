@@ -8,33 +8,18 @@
       "flipX": true,
       "flipY": false
     },
+    "temporal": { "enabled": true },
     "bilateral": {
       "enabled": true,
-      "kernelRadius": 5,
-      "sigmaSpatial": 1.5,
-      "sigmaRange": 0.5
+      "kernelRadius": 2,
+      "sigmaSpatial": 2.0,
+      "sigmaRange": 0.1
     },
     "sobel": {
       "enabled": true,
-      "thetaRadius": 10,
-      "rhoRadius": 10,
-      "diagonalWeakening": 0.9,
-      "lengthScale": 3.5,
-      "magnitudeScale": 3.5
+      "sigmaSmall": 1.4,
+      "sigmaLarge": 2.8
     },
-    "magnatude-gate": {
-      "enabled": true,
-      "threshold": 0.035
-    },
-    "temporal": {
-      "enabled": true
-    },
-    "ray-box": {
-      "enabled": true,
-      "threshold": 0.06,
-      "rayCount": 256,
-      "step": 0.25,
-      "trimFraction": 0.06
-    }
+    "ray-box": { "enabled": false }
   }
 }

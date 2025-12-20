@@ -14,12 +14,12 @@ export class TemporalPass extends PassBase {
     constructor(gl: WebGL2RenderingContext, settings: TemporalPassSettings) {
         super(gl, settings);
         this.programInfo = this.createProgramInfo(temporalFrag);
-        this.outputRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.outputRenderTarget = RenderTarget2D.createR8(gl);
         this.history = [
-            RenderTarget2D.createRGBA8(gl),
-            RenderTarget2D.createRGBA8(gl),
-            RenderTarget2D.createRGBA8(gl),
-            RenderTarget2D.createRGBA8(gl),
+            RenderTarget2D.createR8(gl),
+            RenderTarget2D.createR8(gl),
+            RenderTarget2D.createR8(gl),
+            RenderTarget2D.createR8(gl),
         ];
     }
 
@@ -52,7 +52,7 @@ export class TemporalPass extends PassBase {
     }
 
     public applyInternal(renderTargetIn: RenderTarget2D, applyToScreen: boolean): RenderTarget2D {
-        if (!renderTargetIn.isR8 && !renderTargetIn.isRGBA8) {
+        if (!renderTargetIn.isR8) {
             throw new Error('TemporalPass expects R8 or RGBA8 render targets');
         }
 

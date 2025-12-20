@@ -6,8 +6,8 @@
   import BilateralSettings from './lib/ui/settings/BilateralSettings.svelte'
   import Rec709Settings from './lib/ui/settings/Rec709Settings.svelte'
   import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
-  import SobelSettings from './lib/ui/settings/SobelSettings.svelte'
-  import type { SobelPassSettings } from './lib/cv/passes/structure/StructurePassSettings'
+  import StructureSettings from './lib/ui/settings/StructureSettings.svelte'
+  import type { StructurePassSettings } from './lib/cv/passes/structure/StructurePassSettings'
   import MagnatudeGateSettings from './lib/ui/settings/MagnatudeGateSettings.svelte'
   import type { MagnatudeGatePassSettings } from './lib/cv/passes/magnatude-gate/MagnatudeGatePassSettings'
   import TemporalSettings from './lib/ui/settings/TemporalSettings.svelte'
@@ -27,7 +27,7 @@
   const passSettingsComponents: Record<string, any> = {
     'rec709-luma': Rec709Settings,
     bilateral: BilateralSettings,
-    sobel: SobelSettings,
+    sobel: StructureSettings,
     'magnatude-gate': MagnatudeGateSettings,
     temporal: TemporalSettings,
     'ray-box': RayBoxSettings,
@@ -250,7 +250,7 @@
         {#if passDef.id === 'bilateral'}
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as BilateralPassSettings} />
         {:else if passDef.id === 'sobel'}
-          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as SobelPassSettings} />
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as StructurePassSettings} />
         {:else if passDef.id === 'orientation'}
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as OrientationPassSettings} />
         {:else if passDef.id === 'magnatude-gate'}
