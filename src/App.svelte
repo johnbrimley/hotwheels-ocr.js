@@ -7,7 +7,7 @@
   import Rec709Settings from './lib/ui/settings/Rec709Settings.svelte'
   import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
   import SobelSettings from './lib/ui/settings/SobelSettings.svelte'
-  import type { SobelPassSettings } from './lib/cv/passes/sobel/SobelPassSettings'
+  import type { SobelPassSettings } from './lib/cv/passes/structure/StructurePassSettings'
   import MagnatudeGateSettings from './lib/ui/settings/MagnatudeGateSettings.svelte'
   import type { MagnatudeGatePassSettings } from './lib/cv/passes/magnatude-gate/MagnatudeGatePassSettings'
   import TemporalSettings from './lib/ui/settings/TemporalSettings.svelte'

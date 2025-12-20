@@ -5,8 +5,8 @@ import { BilateralPassSettings } from '../passes/bilateral/BilateralPassSettings
 import { Rec709LumPass } from '../passes/rec-709-luma/Rec709LumaPass'
 import { OrientationPass } from '../passes/orientation/OrientationPass'
 import { OrientationPassSettings } from '../passes/orientation/OrientationPassSettings'
-import { SobelPass } from '../passes/sobel/SobelPass'
-import { SobelPassSettings } from '../passes/sobel/SobelPassSettings'
+import { StructurePass } from '../passes/structure/StructurePass'
+import { StructurePassSettings } from '../passes/structure/StructurePassSettings'
 import { MagnatudeGatePass } from '../passes/magnatude-gate/MagnatudeGatePass'
 import { MagnatudeGatePassSettings } from '../passes/magnatude-gate/MagnatudeGatePassSettings'
 import { TemporalPass } from '../passes/temporal/TemporalPass'
@@ -44,12 +44,12 @@ export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
     bilateralSettings.sigmaRange = 0.1
     const bilateral = new BilateralPass(this.gl, bilateralSettings)
 
-    const sobelSettings = new SobelPassSettings()
+    const sobelSettings = new StructurePassSettings()
     sobelSettings.kernelRadius = 1
     sobelSettings.directionBias = 0.0
     sobelSettings.edgeGain = 1.0
     sobelSettings.minEdge = 0.0
-    const sobel = new SobelPass(this.gl, sobelSettings)
+    const sobel = new StructurePass(this.gl, sobelSettings)
 
     const magnatudeGateSettings = new MagnatudeGatePassSettings()
     magnatudeGateSettings.threshold = 0.15

@@ -1,16 +1,16 @@
 import * as twgl from 'twgl.js';
 import { RenderTarget2D } from '../../RenderTarget2D';
 import { PassBase } from '../PassBase';
-import type { SobelPassSettings } from './SobelPassSettings';
+import type { StructurePassSettings } from './StructurePassSettings';
 import sobelGradientsFrag from './sobel-gradients.frag?raw';
 import { draw } from 'svelte/transition';
 import drawLineFrag from './draw-lines.frag?raw';
 
-export class SobelPass extends PassBase {
+export class StructurePass extends PassBase {
     private sobelGradientsProgramInfo: twgl.ProgramInfo;
     private sobelGradientsRenderTarget: RenderTarget2D;
 
-    constructor(gl: WebGL2RenderingContext, private sobelPassSettings: SobelPassSettings) {
+    constructor(gl: WebGL2RenderingContext, private sobelPassSettings: StructurePassSettings) {
         super(gl, sobelPassSettings);
         this.sobelGradientsProgramInfo = this.createProgramInfo(sobelGradientsFrag);
         this.sobelGradientsRenderTarget = RenderTarget2D.createRGBA8(gl);

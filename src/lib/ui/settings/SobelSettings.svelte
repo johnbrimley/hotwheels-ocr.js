@@ -1,7 +1,7 @@
 <script lang="ts">
   import SliderSetting from '../SliderSetting.svelte'
   import ToggleSetting from '../ToggleSetting.svelte'
-  import type { SobelPassSettings } from '../../cv/passes/sobel/SobelPassSettings'
+  import type { SobelPassSettings } from '../../cv/passes/structure/StructurePassSettings'
 
   export let settings: SobelPassSettings
   export let required: boolean = false
