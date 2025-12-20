@@ -16,10 +16,11 @@
     },
     "sobel": {
       "enabled": true,
-      "kernelRadius": 2,
-      "directionBias": -0.1,
-      "edgeGain": 0.7,
-      "minEdge": 0
+      "thetaRadius": 10,
+      "rhoRadius": 10,
+      "diagonalWeakening": 0.9,
+      "lengthScale": 3.5,
+      "magnitudeScale": 3.5
     },
     "magnatude-gate": {
       "enabled": true,

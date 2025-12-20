@@ -3,9 +3,12 @@ import { RenderTarget2D } from '../../RenderTarget2D';
 import { PassBase } from '../PassBase';
 import type { SobelPassSettings } from './SobelPassSettings';
 import sobelFrag from './sobel.frag?raw';
+import { draw } from 'svelte/transition';
+import drawLineFrag from './draw-lines.frag?raw';
 
 export class SobelPass extends PassBase {
     private sobelProgramInfo: twgl.ProgramInfo;
+    private lineProgramInfo: twgl.ProgramInfo;
     private sobelRenderTarget: RenderTarget2D;
     private outputRenderTarget: RenderTarget2D;
     private sobelArray: Uint8Array;
@@ -15,9 +18,14 @@ export class SobelPass extends PassBase {
     private strengthIndicesBuckets: Uint16Array;
     private displayArray: Uint8Array;
 
+    private lineTexture: WebGLTexture | null = null;
+    private readonly MAX_LINES = 6;
+    private consoleCounter = 0;
+
     constructor(gl: WebGL2RenderingContext, private sobelPassSettings: SobelPassSettings) {
         super(gl, sobelPassSettings);
         this.sobelProgramInfo = this.createProgramInfo(sobelFrag);
+        this.lineProgramInfo = this.createProgramInfo(drawLineFrag);
         this.outputRenderTarget = RenderTarget2D.createRGBA8(gl);
         this.sobelRenderTarget = RenderTarget2D.createRGBA8(gl);
         this.sobelArray = new Uint8Array(0);
@@ -40,8 +48,16 @@ export class SobelPass extends PassBase {
         this.updateStrengthBuckets();
         const peaks = this.findPeaks();
         const box = this.chooseBox(peaks);
-        this.drawLines(peaks);
+        const topX = [];
+        for (let i = 0; i < 4; i++) {
+            if (this.consoleCounter % 111 === 0) {
+                console.log('Peak', i, peaks[i]);
+            }
+            topX.push(peaks[i]);
 
+        }
+        this.drawLines(box);
+        this.consoleCounter++;
         return this.outputRenderTarget;
     }
 
@@ -170,41 +186,75 @@ export class SobelPass extends PassBase {
     private chooseBox(
         peaks: { thetaIndex: number; rhoIndex: number; strength: number; }[]
     ): { thetaIndex: number; rhoIndex: number; strength: number; }[] {
-
-        if (peaks.length < 2) return [];
-
-        const strongest = peaks[0];
-
-        const rhoBins = 128;
+    
         const thetaBins = 64;
-
-        // mirror around center (signed rho, signed theta intuition)
-        const expectedRho = (rhoBins - strongest.rhoIndex) % rhoBins;
-        const expectedTheta = (thetaBins - strongest.thetaIndex) % thetaBins;
-
-        let bestMatch: typeof strongest | null = null;
-        let bestDistance = Infinity;
-
-        for (let i = 1; i < peaks.length; i++) {
-            const p = peaks[i];
-
-            const dRho = Math.abs(p.rhoIndex - expectedRho);
-            const dTheta = Math.abs(p.thetaIndex - expectedTheta);
-
-            // simple L1 distance in Hough space
-            const distance = dRho + dTheta;
-
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                bestMatch = p;
+        const rhoBins   = 128;
+    
+        const thetaCenter = thetaBins >> 1; // 32
+        const rhoCenter   = rhoBins >> 1;   // 64
+    
+        let verticalLeft:  { thetaIndex: number; rhoIndex: number; strength: number } | null = null;
+        let verticalRight: { thetaIndex: number; rhoIndex: number; strength: number } | null = null;
+        let horizontalAbove: { thetaIndex: number; rhoIndex: number; strength: number } | null = null;
+        let horizontalBelow: { thetaIndex: number; rhoIndex: number; strength: number } | null = null;
+    
+        for (const p of peaks) {
+            const ti = p.thetaIndex;
+            const ri = p.rhoIndex;
+    
+            // distance to vertical (0 or 63)
+            const distToVertical = Math.min(
+                ti,
+                thetaBins - ti
+            );
+    
+            // distance to horizontal (32)
+            const distToHorizontal = Math.abs(ti - thetaCenter);
+    
+            if (distToVertical < distToHorizontal) {
+                // mostly vertical
+                if (ri < rhoCenter) {
+                    if (!verticalLeft || p.strength > verticalLeft.strength) {
+                        verticalLeft = p;
+                    }
+                } else {
+                    if (!verticalRight || p.strength > verticalRight.strength) {
+                        verticalRight = p;
+                    }
+                }
+            } else {
+                // mostly horizontal
+                if (ri < rhoCenter) {
+                    if (!horizontalAbove || p.strength > horizontalAbove.strength) {
+                        horizontalAbove = p;
+                    }
+                } else {
+                    if (!horizontalBelow || p.strength > horizontalBelow.strength) {
+                        horizontalBelow = p;
+                    }
+                }
             }
         }
-
-        if (!bestMatch) return [strongest];
-       
-
-        return [strongest, bestMatch];
+    
+        if (this.consoleCounter % 111 === 0) {
+            console.log('VLC', verticalLeft);
+            console.log('VRC', verticalRight);
+            console.log('HAC', horizontalAbove);
+            console.log('HBC', horizontalBelow);
+        }
+    
+        // return strongest from each quadrant (if present)
+        const result: { thetaIndex: number; rhoIndex: number; strength: number }[] = [];
+    
+        if (verticalLeft)     result.push(verticalLeft);
+        if (verticalRight)    result.push(verticalRight);
+        if (horizontalAbove)  result.push(horizontalAbove);
+        if (horizontalBelow)  result.push(horizontalBelow);
+    
+        return result;
     }
+    
+    
 
 
 
@@ -247,157 +297,114 @@ export class SobelPass extends PassBase {
     private drawLines(
         peaks: { thetaIndex: number; rhoIndex: number; strength: number }[]
     ): void {
-    
+
+        const gl = this.gl;
+
         const imgW = 640;
         const imgH = 480;
-    
+
         const thetaBins = 64;
-        const rhoBins   = 128;
-    
-        // ensure render target size
+        const rhoBins = 128;
+
+        const lineCount = Math.min(this.MAX_LINES, peaks.length);
+
+        // ---------------------------------------------------------------------
+        // 1) Build CPU-side line array (RGBA32F, width = MAX_LINES, height = 1)
+        // ---------------------------------------------------------------------
+        const lineData = new Float32Array(this.MAX_LINES * 4);
+
+        for (let i = 0; i < lineCount; i++) {
+            const { thetaIndex, rhoIndex } = peaks[i];
+
+            const theta =
+                (thetaIndex + 0.5) / thetaBins * Math.PI;
+
+            const rho =
+                ((rhoIndex + 0.5) / rhoBins) * (2 * Math.SQRT2) - Math.SQRT2;
+
+            const base = i * 4;
+            lineData[base + 0] = theta;
+            lineData[base + 1] = rho;
+            lineData[base + 2] = 0.0;
+            lineData[base + 3] = 0.0;
+        }
+
+        // zero unused slots
+        for (let i = lineCount; i < this.MAX_LINES; i++) {
+            const base = i * 4;
+            lineData[base + 0] = 0.0;
+            lineData[base + 1] = 0.0;
+            lineData[base + 2] = 0.0;
+            lineData[base + 3] = 0.0;
+        }
+
+        // ---------------------------------------------------------------------
+        // 2) Create / update 1D texture for lines
+        // ---------------------------------------------------------------------
+        if (!this.lineTexture) {
+            this.lineTexture = gl.createTexture()!;
+            gl.bindTexture(gl.TEXTURE_2D, this.lineTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA32F,
+                this.MAX_LINES,
+                1,
+                0,
+                gl.RGBA,
+                gl.FLOAT,
+                lineData
+            );
+        } else {
+            gl.bindTexture(gl.TEXTURE_2D, this.lineTexture);
+            gl.texSubImage2D(
+                gl.TEXTURE_2D,
+                0,
+                0, 0,
+                this.MAX_LINES,
+                1,
+                gl.RGBA,
+                gl.FLOAT,
+                lineData
+            );
+        }
+
+        // ---------------------------------------------------------------------
+        // 3) Bind output render target
+        // ---------------------------------------------------------------------
         if (
-            this.outputRenderTarget.framebufferInfo.width  !== imgW ||
+            this.outputRenderTarget.framebufferInfo.width !== imgW ||
             this.outputRenderTarget.framebufferInfo.height !== imgH
         ) {
             this.outputRenderTarget.resize(imgW, imgH);
         }
-    
-        // clear output
-        this.displayArray.fill(0);
-        for (let i = 3; i < this.displayArray.length; i += 4) {
-            this.displayArray[i] = 255;
-        }
-    
-        const maxLines = Math.min(8, peaks.length);
-    
-        for (let i = 0; i < maxLines; i++) {
-            const { thetaIndex, rhoIndex, strength } = peaks[i];
-    
-            // --- bin → (theta, rho) ---
-            const theta =
-                (thetaIndex + 0.5) / thetaBins * Math.PI;
-    
-            const rho =
-                ((rhoIndex + 0.5) / rhoBins) * (2 * Math.SQRT2) - Math.SQRT2;
-    
-            const cosTheta = Math.cos(theta);
-            const sinTheta = Math.sin(theta);
-    
-            // color by rank (unchanged)
-            const hue = i / maxLines;
-            const [rf, gf, bf] = this.hsvToRgb(hue, 1.0, 1.0);
-    
-            const R = (rf * 255) | 0;
-            const G = (gf * 255) | 0;
-            const B = (bf * 255) | 0;
-    
-            const thickness = Math.max(1, Math.floor(strength * 3));
-    
-            // --- find intersections with image bounds ---
-            const points: { x: number; y: number }[] = [];
-    
-            const w = imgW - 1;
-            const h = imgH - 1;
-    
-            // left (x = -1)
-            if (Math.abs(sinTheta) > 1e-6) {
-                const xNorm = -1;
-                const yNorm = (rho - xNorm * cosTheta) / sinTheta;
-                if (yNorm >= -1 && yNorm <= 1) {
-                    points.push({
-                        x: 0,
-                        y: ((yNorm * 0.5 + 0.5) * h) | 0
-                    });
-                }
-            }
-    
-            // right (x = +1)
-            if (Math.abs(sinTheta) > 1e-6) {
-                const xNorm = 1;
-                const yNorm = (rho - xNorm * cosTheta) / sinTheta;
-                if (yNorm >= -1 && yNorm <= 1) {
-                    points.push({
-                        x: w,
-                        y: ((yNorm * 0.5 + 0.5) * h) | 0
-                    });
-                }
-            }
-    
-            // top (y = -1)
-            if (Math.abs(cosTheta) > 1e-6) {
-                const yNorm = -1;
-                const xNorm = (rho - yNorm * sinTheta) / cosTheta;
-                if (xNorm >= -1 && xNorm <= 1) {
-                    points.push({
-                        x: ((xNorm * 0.5 + 0.5) * w) | 0,
-                        y: 0
-                    });
-                }
-            }
-    
-            // bottom (y = +1)
-            if (Math.abs(cosTheta) > 1e-6) {
-                const yNorm = 1;
-                const xNorm = (rho - yNorm * sinTheta) / cosTheta;
-                if (xNorm >= -1 && xNorm <= 1) {
-                    points.push({
-                        x: ((xNorm * 0.5 + 0.5) * w) | 0,
-                        y: h
-                    });
-                }
-            }
-    
-            if (points.length < 2) continue;
-    
-            const p0 = points[0];
-            const p1 = points[1];
-    
-            // --- draw line segment (Bresenham) ---
-            let x0 = p0.x;
-            let y0 = p0.y;
-            const x1 = p1.x;
-            const y1 = p1.y;
-    
-            const dx = Math.abs(x1 - x0);
-            const dy = Math.abs(y1 - y0);
-            const sx = x0 < x1 ? 1 : -1;
-            const sy = y0 < y1 ? 1 : -1;
-            let err = dx - dy;
-    
-            while (true) {
-                for (let t = -thickness; t <= thickness; t++) {
-                    const xx = x0 + t;
-                    const yy = y0 + t;
-                    if (xx >= 0 && xx < imgW && yy >= 0 && yy < imgH) {
-                        const idx = (yy * imgW + xx) * 4;
-                        this.displayArray[idx + 0] = R;
-                        this.displayArray[idx + 1] = G;
-                        this.displayArray[idx + 2] = B;
-                        this.displayArray[idx + 3] = 255;
-                    }
-                }
-    
-                if (x0 === x1 && y0 === y1) break;
-    
-                const e2 = err << 1;
-                if (e2 > -dy) { err -= dy; x0 += sx; }
-                if (e2 <  dx) { err += dx; y0 += sy; }
-            }
-        }
-    
-        // upload to GPU
-        const gl = this.gl;
-        gl.bindTexture(gl.TEXTURE_2D, this.outputRenderTarget.texture);
-        gl.texSubImage2D(
-            gl.TEXTURE_2D,
-            0,
-            0, 0,
-            imgW,
-            imgH,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            this.displayArray
+
+        twgl.bindFramebufferInfo(gl, this.outputRenderTarget.framebufferInfo);
+        gl.viewport(0, 0, imgW, imgH);
+
+        // ---------------------------------------------------------------------
+        // 4) Draw fullscreen quad with line shader
+        // ---------------------------------------------------------------------
+        gl.useProgram(this.lineProgramInfo.program);
+
+        twgl.setBuffersAndAttributes(
+            gl,
+            this.lineProgramInfo,
+            this.quadBufferInfo
         );
-    }    
+
+        twgl.setUniforms(this.lineProgramInfo, {
+            u_lines: this.lineTexture,
+            u_imageSize: [imgW, imgH]
+        });
+
+        twgl.drawBufferInfo(gl, this.quadBufferInfo);
+    }
+
 
 }
