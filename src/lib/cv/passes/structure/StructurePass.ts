@@ -31,7 +31,7 @@ export class StructurePass extends PassBase {
     private currentSigmaSmallWeights: Float32Array = new Float32Array(19);
     private currentSigmaLargeWeights: Float32Array = new Float32Array(19);
     private dogRGBAData: Uint8Array = new Uint8Array();
-    private dogHistogram: Histogram = new Histogram(256,0);
+    private dogHistogram: Histogram = new Histogram(256, 0);
     private dogCountdown: Countdown;
     private dogPercentileThreshold: number = 0.0;
 
@@ -97,56 +97,64 @@ outColor = texture(u_input, v_uv);
         this.executeDifferenceOfGaussians();
         this.executeNeighborScoring();
         this.buildMetadata();
-        this.drawJunk();
+        this.drawJunk(this.neighborScoringRenderTarget.framebufferInfo.width, this.neighborScoringRenderTarget.framebufferInfo.height);
         return this.dogRenderTarget;
     }
 
-    private drawJunk(): void{
+    private drawJunk(width: number, height: number): void {
         const lumaArray = new Float32Array(this.metadata.length);
-        for(let i = 0; i < this.metadata.length; i++){
-            const meta = this.metadata[i];
-            if(meta.continuityScore.score > .4 && meta.continuityScore.score <= .8){
-                lumaArray[i] = 1.0;
+        const best = 
+            this.metadata.slice()
+            .filter((p) => p.score > .1)
+            .sort((a, b) => b.score - b.score);
+        for (let i = 0; i < 50000; i++) {
+            let current = best[i];
+            let count = 100;
+            while (count-- > 0 && current && current.score > .1) {
+                lumaArray[current.index] = 1.0;
+                current = this.metadata[current.nextContinuityScoreIndex!];
             }
         }
         this.drawLumaArray(
             this.gl,
             this.debugProgramInfo,
             this.debugRenderTarget,
+            width,
+            height,
             lumaArray
         );
     }
 
     private checkAndUpdateGaussianWeights() {
         const settings = this.settings as StructurePassSettings;
-        if(this.currentSigmaSmall !== settings.sigmaSmall) {
+        if (this.currentSigmaSmall !== settings.sigmaSmall) {
             this.currentSigmaSmall = settings.sigmaSmall;
             this.currentSigmaSmallWeights = DifferenceOfGaussians.calculateGaussianWeights(settings.sigmaSmall, 19);
         }
-        if(this.currentSigmaLarge !== settings.sigmaLarge) {
+        if (this.currentSigmaLarge !== settings.sigmaLarge) {
             this.currentSigmaLarge = settings.sigmaLarge;
             this.currentSigmaLargeWeights = DifferenceOfGaussians.calculateGaussianWeights(settings.sigmaLarge, 19);
         }
     }
 
-    private executeDifferenceOfGaussians():void{
+    private executeDifferenceOfGaussians(): void {
         this.settings.uniforms['u_sigmaSmallWeights'] = this.currentSigmaSmallWeights;
         this.settings.uniforms['u_sigmaLargeWeights'] = this.currentSigmaLargeWeights;
         this.executeProgram(this.dogProgramInfo, this.sobelGradientsRenderTarget, this.dogRenderTarget);
         this.dogCountdown.tick(); // periodically recalc DoG percentiles
     }
 
-    private executeNeighborScoring():void{
+    private executeNeighborScoring(): void {
         this.settings.uniforms['u_dogThreshold'] = this.dogPercentileThreshold;
         this.settings.uniforms['u_dogs'] = this.dogRenderTarget.texture;
         this.executeProgram(this.neighborScoringProgramInfo, this.sobelVectorsRenderTarget, this.neighborScoringRenderTarget);
         const width = this.neighborScoringRenderTarget.framebufferInfo.width;
         const height = this.neighborScoringRenderTarget.framebufferInfo.height;
         this.neighborScoringRGBAData = this.readRGBA8Framebuffer(this.gl, this.neighborScoringRenderTarget.framebufferInfo.framebuffer, width, height, this.neighborScoringRGBAData);
-        if(this.continuityScores.length < width * height){
+        if (this.continuityScores.length < width * height) {
             this.continuityScores = new Array(width * height);
         }
-        for(let i = 0; i < width * height; i++){
+        for (let i = 0; i < width * height; i++) {
             const rgbaIndex = i * 4;
             const r = this.neighborScoringRGBAData[rgbaIndex + 0];
             const g = this.neighborScoringRGBAData[rgbaIndex + 1];
@@ -156,13 +164,13 @@ outColor = texture(u_input, v_uv);
         }
     }
 
-    private recalculateDoGPercentiles(): void{
+    private recalculateDoGPercentiles(): void {
         const width = this.dogRenderTarget.framebufferInfo.width;
         const height = this.dogRenderTarget.framebufferInfo.height;
         this.dogRGBAData = this.readRGBA8Framebuffer(this.gl, this.dogRenderTarget.framebufferInfo.framebuffer, width, height, this.dogRGBAData);
 
         this.dogHistogram.reset(width * height);
-        for(let i = 0; i < width * height; i++){
+        for (let i = 0; i < width * height; i++) {
             const rgbaIndex = i * 4;
             const r = this.dogRGBAData[rgbaIndex + 0];
             const g = this.dogRGBAData[rgbaIndex + 1];
@@ -175,39 +183,65 @@ outColor = texture(u_input, v_uv);
         this.dogPercentileThreshold = this.dogHistogram.getPercentile(0.1);
     }
 
-    private buildMetadata(){
+    private buildMetadata() {
         const width = this.neighborScoringRenderTarget.framebufferInfo.width;
         const height = this.neighborScoringRenderTarget.framebufferInfo.height;
-        if(this.metadata.length < width * height){
+
+        if (this.metadata.length < width * height) {
             this.metadata = new Array(width * height);
         }
-        this.sobelGradientsRGBAData = this.readRGBA8Framebuffer(this.gl, this.sobelGradientsRenderTarget.framebufferInfo.framebuffer, width, height, this.sobelGradientsRGBAData);
-        for(let i = 0; i < width * height; i++){
+
+        this.sobelGradientsRGBAData =
+            this.readRGBA8Framebuffer(
+                this.gl,
+                this.sobelGradientsRenderTarget.framebufferInfo.framebuffer,
+                width,
+                height,
+                this.sobelGradientsRGBAData
+            );
+
+        for (let i = 0; i < width * height; i++) {
             const rgbaIndex = i * 4;
+
             const b = this.sobelGradientsRGBAData[rgbaIndex + 2];
             const a = this.sobelGradientsRGBAData[rgbaIndex + 3];
-            const magitude = ((b <<8) | a) / 65535.0;
-            const meta: Metadata = 
-            {
-                index: i,
-                continuityScore: this.continuityScores[i],
-                nextContinuityScoreIndex: -1,
-                magnitude: magitude 
-            };
-            //calculate nextContinuityScoreIndex from meta.continuityScore.neighborXOffset and meta.continuityScore.neighborYOffset;
-            this.metadata[i] = meta;
-        }
-        let maxMagnitude = 0;
-        let minMagnitude = Number.POSITIVE_INFINITY;
-        let maxScore = 0;
-        let minScore = Number.POSITIVE_INFINITY;
-        for(let i = 0; i < width * height; i++){
-            const meta = this.metadata[i];
+            const magnitude = ((b << 8) | a) / 65535.0;
+
             const cs = this.continuityScores[i];
-            if(meta.magnitude > maxMagnitude) maxMagnitude = meta.magnitude;
-            if(meta.magnitude < minMagnitude) minMagnitude = meta.magnitude;
-            if(cs.score > maxScore) maxScore = cs.score;
-            if(cs.score < minScore) minScore = cs.score;
+
+            let nextIndex = -1;
+
+            if (cs.neighborXOffset !== 0 || cs.neighborYOffset !== 0) {
+                const x = i % width;
+                const y = (i / width) | 0;
+
+                const nx = x + cs.neighborXOffset;
+                const ny = y + cs.neighborYOffset;
+
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    nextIndex = ny * width + nx;
+                }
+            }
+
+            this.metadata[i] = {
+                index: i,
+                continuityScore: cs,
+                nextContinuityScoreIndex: nextIndex,
+                magnitude,
+                score: cs.score * magnitude
+            };
+            // let maxMagnitude = 0;
+            // let minMagnitude = Number.POSITIVE_INFINITY;
+            // let maxScore = 0;
+            // let minScore = Number.POSITIVE_INFINITY;
+            // for(let i = 0; i < width * height; i++){
+            //     const meta = this.metadata[i];
+            //     const cs = this.continuityScores[i];
+            //     if(meta.magnitude > maxMagnitude) maxMagnitude = meta.magnitude;
+            //     if(meta.magnitude < minMagnitude) minMagnitude = meta.magnitude;
+            //     if(cs.score > maxScore) maxScore = cs.score;
+            //     if(cs.score < minScore) minScore = cs.score;
+            // }
         }
     }
 
@@ -218,7 +252,7 @@ outColor = texture(u_input, v_uv);
         height: number,
         target?: Uint8Array
     ) {
-        if(!target || target.length < width * height * 4){
+        if (!target || target.length < width * height * 4) {
             target = new Uint8Array(width * height * 4);
         }
 
@@ -249,14 +283,14 @@ outColor = texture(u_input, v_uv);
         gl: WebGLRenderingContext,
         programInfo: twgl.ProgramInfo,
         renderTarget: RenderTarget2D,
+        width: number,
+        height: number,
         luma: Float32Array | number[]
     ) {
         // 1. Convert luma → RGBA (Uint8)
-        const WIDTH = 640;
-        const HEIGHT = 480;
-        const rgba = new Uint8Array(WIDTH * HEIGHT * 4);
+        const rgba = new Uint8Array(width * height * 4);
 
-        for (let i = 0; i < WIDTH * HEIGHT; i++) {
+        for (let i = 0; i < width * height; i++) {
             const v = Math.max(0, Math.min(1, luma[i])) * 255;
             const o = i * 4;
             rgba[o + 0] = v; // R
@@ -273,8 +307,8 @@ outColor = texture(u_input, v_uv);
             gl.TEXTURE_2D,
             0,
             gl.RGBA,
-            WIDTH,
-            HEIGHT,
+            width,
+            height,
             0,
             gl.RGBA,
             gl.UNSIGNED_BYTE,
@@ -283,7 +317,7 @@ outColor = texture(u_input, v_uv);
 
         // 3. Bind framebuffer (null = screen)
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.viewport(0, 0, WIDTH, HEIGHT);
+        gl.viewport(0, 0, width, height);
 
         // 4. Draw fullscreen quad
         gl.useProgram(programInfo.program);

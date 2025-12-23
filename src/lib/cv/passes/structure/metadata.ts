@@ -6,4 +6,5 @@ export interface Metadata{
     continuityScore: ContinuityScore
     nextContinuityScoreIndex: number;
     magnitude: number;
+    score: number;
 }
