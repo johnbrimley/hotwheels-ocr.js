@@ -95,14 +95,14 @@ outColor = texture(u_input, v_uv);
             const seed = this.metadata[i];
         
             if (seed.visited) continue;
-            if (seed.continuityScore.score < 0.8) break;
+            if (seed.continuityScore.score < 0.96) break;
         
             let cur = seed;
         
             while (
                 cur &&
                 !cur.visited &&
-                cur.continuityScore.score > 0.5 &&
+                cur.continuityScore.score > 0.8 &&
                 cur.magnitude > 0.04
             ) {
                 cur.visited = true;

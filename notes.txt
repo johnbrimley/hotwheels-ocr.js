@@ -1,0 +1,16 @@
+Binary 5x5 Sobel statistics:
+  Max magnitude²: 3272
+  Max magnitude:  57.201399
+  Unique magnitude² values: 732
+  Unique |cos|² values:     1025
+
+Pattern producing max magnitude:
+#####
+####.
+##...
+#....
+.....
+
+Gradients:
+  gx = -34
+  gy = -46

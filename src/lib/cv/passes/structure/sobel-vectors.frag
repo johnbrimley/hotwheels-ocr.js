@@ -3,54 +3,62 @@ precision highp float;
 
 in vec2 v_uv;
 
-uniform sampler2D u_input;
+uniform sampler2D u_input; //gradients
+uniform sampler2D u_magnitude
 
 out vec4 outColor;
 
-// --- decoders ---
-
-float decodeSnorm8(float v)
+vec4 packHalf2ToRGBA8LittleEndian(vec2 v)
 {
-    return v * 2.0 - 1.0;
-}
-
-float decodeUNorm16(vec2 ba)
-{
-    float hi = ba.x * 255.0;
-    float lo = ba.y * 255.0;
-    return (hi * 256.0 + lo) / 65535.0;
-}
-
-// --- half pack ---
-
-vec4 packHalf2x16ToRGBA8(float x, float y)
-{
-    uint bits = packHalf2x16(vec2(x, y));
+    uint p = packHalf2x16(v);
 
     return vec4(
-        float((bits >> 24) & 0xFFu) / 255.0,
-        float((bits >> 16) & 0xFFu) / 255.0,
-        float((bits >>  8) & 0xFFu) / 255.0,
-        float((bits >>  0) & 0xFFu) / 255.0
-    );
+        float( p        & 0xFFu),
+        float((p >> 8)  & 0xFFu),
+        float((p >> 16) & 0xFFu),
+        float((p >> 24) & 0xFFu)
+    ) / 255.0;
+}
+
+vec2 unpackHalf2FromRGBA8LittleEndian(vec4 rgba)
+{
+    // Convert normalized [0,1] back to integer bytes
+    uvec4 b = uvec4(rgba * 255.0 + 0.5);
+
+    uint packed =
+          (b.x)
+        | (b.y << 8)
+        | (b.z << 16)
+        | (b.w << 24);
+
+    return unpackHalf2x16(packed);
+}
+
+float unpackFloatFromRGBA8LittleEndian(vec4 rgba)
+{
+    // Recover integer bytes with round-to-nearest
+    uvec4 b = uvec4(rgba * 255.0 + 0.5);
+
+    uint bits =
+          (b.x)
+        | (b.y << 8)
+        | (b.z << 16)
+        | (b.w << 24);
+
+    return uintBitsToFloat(bits);
 }
 
 void main()
 {
-    vec4 packed = texture(u_input, v_uv);
+    vec4 gradientsPacked = texture(u_input, v_uv);
+    vec4 magnitudePacked = texture(u_gradients, v_uv);
 
-    // Decode signed gradients (normalized)
-    float gx = decodeSnorm8(packed.r);
-    float gy = decodeSnorm8(packed.g);
+    vec2 gNorm = unpackHalf2FromRGBA8LittleEndian(gradientsPacked);
+    float magNorm = unpackFloatFromRGBA8LittleEndian(magnitudePacked);
 
-    // Decode normalized magnitude (optional use)
-    float mag = decodeUNorm16(packed.ba);
+    magNorm = max(magNorm, 1e-6);
 
-    // Protect against zero vector
-    float len = max(length(vec2(gx, gy)), 1e-6);
+    vec2 unitVectors = clamp(gNorm / magNorm, -1.0,1.0);
 
-    vec2 dir = vec2(gx, gy) / len;
-
-    // Store direction as half floats
-    outColor = packHalf2x16ToRGBA8(dir.x, dir.y);
+    outColor = packHalf2ToRGBA8LittleEndian(unitVectors);
 }

@@ -16,20 +16,19 @@ const float sobelSmoothing[5] = float[5](
      1.0,  4.0, 6.0, 4.0, 1.0
 );
 
-const float SOBEL_G_MAX   = 48.0;
-const float SOBEL_MAG_MAX = 51.264022471905186;
+// Assumes input luma ∈ [0,1]
+const float SOBEL_G_MAX = 48.0;
 
-float encodeSnorm8(float v)
+vec4 packHalf2ToRGBA8LittleEndian(vec2 v)
 {
-    return clamp(v * 0.5 + 0.5, 0.0, 1.0);
-}
+    uint p = packHalf2x16(v);
 
-vec2 encodeUNorm16(float v)
-{
-    float x = clamp(v, 0.0, 1.0);
-    float hi = floor(x * 65535.0 / 256.0);
-    float lo = floor(x * 65535.0 - hi * 256.0);
-    return vec2(hi, lo) / 255.0;
+    return vec4(
+        float( p        & 0xFFu),
+        float((p >> 8)  & 0xFFu),
+        float((p >> 16) & 0xFFu),
+        float((p >> 24) & 0xFFu)
+    ) / 255.0;
 }
 
 void main()
@@ -49,19 +48,12 @@ void main()
         }
     }
 
-    // Signed int8-normalized gx/gy
-    float gxN = clamp(gx / SOBEL_G_MAX, -1.0, 1.0);
-    float gyN = clamp(gy / SOBEL_G_MAX, -1.0, 1.0);
+    // Linear normalization (NOT unit length)
+    vec2 gN = vec2(gx, gy) / SOBEL_G_MAX;
 
-    float mag = length(vec2(gx, gy));
-    float magN = mag / SOBEL_MAG_MAX;
+    // Clamp to representable range
+    gN = clamp(gN, -1.0, 1.0);
 
-    vec2 magBA = encodeUNorm16(magN);
-
-    outColor = vec4(
-        encodeSnorm8(gxN),
-        encodeSnorm8(gyN),
-        magBA.x,
-        magBA.y
-    );
+    // Store as two half-floats packed into RGBA8
+    outColor = packHalf2ToRGBA8LittleEndian(gN);
 }

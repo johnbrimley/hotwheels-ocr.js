@@ -1,0 +1,12 @@
+[package]
+name = "hotwheels-ocr-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = "0.2"
+bytemuck = { version = "1.14", features = ["derive"] }
+half = "2"
+
+[lib]
+crate-type = ["cdylib"]
