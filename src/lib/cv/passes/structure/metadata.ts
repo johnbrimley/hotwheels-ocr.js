@@ -1,13 +1,9 @@
 import type { DifferenceOfGaussians } from "../../models/DifferenceOfGaussians";
-import type { Sobel } from "../../models/Sobel";
+import type { ContinuityScore } from "../../models/ContinuityScore";
 
 export interface Metadata{
     index: number;
-    sobel: Sobel;
-    dog: DifferenceOfGaussians;
-    strongestNeighborIndex: number;
-    strongestNeighborScore: number;
-    secondStrongestNeighborIndex: number;
-    secondStrongestNeighborScore: number;
-    score: number;
+    continuityScore: ContinuityScore
+    nextContinuityScoreIndex: number;
+    magnitude: number;
 }

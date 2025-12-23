@@ -16,55 +16,52 @@ const float sobelSmoothing[5] = float[5](
      1.0,  4.0, 6.0, 4.0, 1.0
 );
 
-const float SOBEL_DIRECTION_NORMALIZATION = 48.0;
+const float SOBEL_G_MAX   = 48.0;
+const float SOBEL_MAG_MAX = 51.264022471905186;
+
+float encodeSnorm8(float v)
+{
+    return clamp(v * 0.5 + 0.5, 0.0, 1.0);
+}
+
+vec2 encodeUNorm16(float v)
+{
+    float x = clamp(v, 0.0, 1.0);
+    float hi = floor(x * 65535.0 / 256.0);
+    float lo = floor(x * 65535.0 - hi * 256.0);
+    return vec2(hi, lo) / 255.0;
+}
 
 void main()
 {
-    float gradientX = 0.0;
-    float gradientY = 0.0;
+    float gx = 0.0;
+    float gy = 0.0;
 
-    for (int offsetY = 0; offsetY < 5; offsetY++)
+    for (int y = 0; y < 5; y++)
     {
-        for (int offsetX = 0; offsetX < 5; offsetX++)
+        for (int x = 0; x < 5; x++)
         {
-            vec2 sampleOffset =
-                vec2(float(offsetX - 2), float(offsetY - 2)) * u_texelSize;
+            vec2 o = vec2(float(x - 2), float(y - 2)) * u_texelSize;
+            float l = texture(u_input, v_uv + o).r;
 
-            float sampleLuma =
-                texture(u_input, v_uv + sampleOffset).r;
-
-            gradientX +=
-                sampleLuma *
-                sobelDerivative[offsetX] *
-                sobelSmoothing[offsetY];
-
-            gradientY +=
-                sampleLuma *
-                sobelSmoothing[offsetX] *
-                sobelDerivative[offsetY];
+            gx += l * sobelDerivative[x] * sobelSmoothing[y];
+            gy += l * sobelSmoothing[x] * sobelDerivative[y];
         }
     }
 
-    // Normalize to [-1, +1]
-    float gxNorm = gradientX / SOBEL_DIRECTION_NORMALIZATION;
-    float gyNorm = gradientY / SOBEL_DIRECTION_NORMALIZATION;
+    // Signed int8-normalized gx/gy
+    float gxN = clamp(gx / SOBEL_G_MAX, -1.0, 1.0);
+    float gyN = clamp(gy / SOBEL_G_MAX, -1.0, 1.0);
 
-    // Map to [0, 65535]
-    float gxU16 = (gxNorm * 0.5 + 0.5) * 65535.0;
-    float gyU16 = (gyNorm * 0.5 + 0.5) * 65535.0;
+    float mag = length(vec2(gx, gy));
+    float magN = mag / SOBEL_MAG_MAX;
 
-    // Split into bytes
-    float gxHigh = floor(gxU16 / 256.0);
-    float gxLow  = mod(gxU16, 256.0);
+    vec2 magBA = encodeUNorm16(magN);
 
-    float gyHigh = floor(gyU16 / 256.0);
-    float gyLow  = mod(gyU16, 256.0);
-
-    // Store as normalized bytes
     outColor = vec4(
-        gxHigh / 255.0,
-        gxLow  / 255.0,
-        gyHigh / 255.0,
-        gyLow  / 255.0
+        encodeSnorm8(gxN),
+        encodeSnorm8(gyN),
+        magBA.x,
+        magBA.y
     );
 }

@@ -1,3 +1,5 @@
+import { ShaderDataConverter } from "../helpers/ShaderDataConverter";
+
 /**
  * Represents a single Difference-of-Gaussians (DoG) sample
  * unpacked from an RGBA8 render target.
@@ -22,31 +24,17 @@ export class DifferenceOfGaussians {
         b: number,
         a: number
     ) {
-        /*
-            Reconstruct unsigned 32-bit integer.
-            Use >>> 0 to force unsigned arithmetic.
-        */
-        const unsigned32 =
-            ((r << 24) >>> 0) |
-            (g << 16) |
-            (b << 8)  |
-            a;
+        this.value = ShaderDataConverter.unpackFloat32FromRGBA8(r, g, b, a);
+    }
 
-        /*
-            Convert back to signed 32-bit integer.
-            Range: [-2147483648, +2147483647]
-        */
-        const signed32 =
-            unsigned32 - 0x80000000;
-
-        /*
-            Normalize back to [-1, +1].
-
-            Note:
-            We divide by 2147483647.0 (INT32_MAX),
-            which matches the shader packing.
-        */
-        this.value =
-            signed32 / 2147483647.0;
+    static calculateGaussianWeights(sigma: number, kernelSize: number): Float32Array {
+        const weights = new Float32Array(kernelSize);
+        const halfSize = Math.floor(kernelSize / 2);
+        const sigmaSquared = sigma * sigma;
+        for (let i = -halfSize; i <= halfSize; i++) {
+            const weight = Math.exp(-(i * i) / (2 * sigmaSquared));
+            weights[i + halfSize] = weight;
+        }
+        return weights;
     }
 }
