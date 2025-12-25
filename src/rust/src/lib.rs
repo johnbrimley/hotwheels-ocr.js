@@ -6,6 +6,8 @@ pub mod float_view;
 pub mod structure_pass_settings;
 pub mod continuity_view;
 pub mod continuity;
+pub mod hough_sample;
+pub mod hough_samples;
 
 
 use crate::half_2_view::Half2View;
@@ -13,6 +15,8 @@ use crate::float_view::FloatView;
 use crate::continuity_view::ContinuityView;
 use crate::structure_pass_settings::StructurePassSettings;
 use crate::continuity::Continuity;
+use crate::hough_sample::HoughSample;
+use crate::hough_samples::HoughSamples;
 
 const THETA_BINS: usize = 64;
 const RHO_BINS: usize = 128;
