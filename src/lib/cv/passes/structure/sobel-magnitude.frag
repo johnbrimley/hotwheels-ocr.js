@@ -34,8 +34,6 @@ vec4 packFloatToRGBA8LittleEndian(float v)
     ) / 255.0;
 }
 
-
-
 void main()
 {
     vec4 packed = texture(u_input, v_uv);

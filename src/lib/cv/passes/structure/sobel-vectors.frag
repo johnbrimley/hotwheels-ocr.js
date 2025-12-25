@@ -4,7 +4,7 @@ precision highp float;
 in vec2 v_uv;
 
 uniform sampler2D u_input; //gradients
-uniform sampler2D u_magnitude
+uniform sampler2D u_magnitude;
 
 out vec4 outColor;
 
@@ -51,7 +51,7 @@ float unpackFloatFromRGBA8LittleEndian(vec4 rgba)
 void main()
 {
     vec4 gradientsPacked = texture(u_input, v_uv);
-    vec4 magnitudePacked = texture(u_gradients, v_uv);
+    vec4 magnitudePacked = texture(u_magnitude, v_uv);
 
     vec2 gNorm = unpackHalf2FromRGBA8LittleEndian(gradientsPacked);
     float magNorm = unpackFloatFromRGBA8LittleEndian(magnitudePacked);

@@ -2,18 +2,20 @@ import { PassSettingsBase } from "../PassSettingsBase";
 
 // Uniforms remain for API compatibility; shader ignores them.
 export class StructurePassSettings extends PassSettingsBase {
-   public get sigmaSmall(): number {
-        return this.uniforms['u_sigmaSmall'];
+    private _conitinuityThreshold: number = 0.1;
+    private _magnitudeThreshold: number = 0.2;
+
+    public get continuityThreshold(): number {
+        return this._conitinuityThreshold;
     }
-    public set sigmaSmall(value: number) {
-        this.uniforms['u_sigmaSmall'] = value;
+    public set continuityThreshold(value: number) {
+        this._conitinuityThreshold = value;
     }
 
-    public get sigmaLarge(): number {
-        return this.uniforms['u_sigmaLarge'];
+    public get magnitudeThreshold(): number {
+        return this._magnitudeThreshold;
     }
-    public set sigmaLarge(value: number) {
-        this.uniforms['u_sigmaLarge'] = value;
-    }
-    
+    public set magnitudeThreshold(value: number) {
+        this._magnitudeThreshold = value;
+    }      
 }

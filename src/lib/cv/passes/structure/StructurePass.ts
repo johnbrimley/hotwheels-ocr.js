@@ -3,31 +3,30 @@ import { RenderTarget2D } from '../../RenderTarget2D';
 import { PassBase } from '../PassBase';
 import type { StructurePassSettings } from './StructurePassSettings';
 import sobelGradientsFrag from './sobel-gradients.frag?raw';
+import sobelMagnitudeFrag from './sobel-magnitude.frag?raw';
 import sobelVectorsFrag from './sobel-vectors.frag?raw';
-import dogFrag from './dog.frag?raw';
-import neighborScoringFrag from './neighbor-scoring.frag?raw';
-import { draw } from 'svelte/transition';
-import { type Metadata } from './metadata';
-import { ContinuityScore } from '../../models/ContinuityScore';
-import { DifferenceOfGaussians } from '../../models/DifferenceOfGaussians';
-import { ShaderDataConverter } from '../../helpers/ShaderDataConverter';
-import { Histogram } from '../../helpers/Histogram';
+import sobelContinuityFrag from './sobel-continuity.frag?raw';
+import houghTransformFrag from './hough-transform.frag?raw';
+import * as wasm from '../../../../wasm/hotwheels-ocr-wasm.js';
 
 
 export class StructurePass extends PassBase {
     private sobelGradientsProgramInfo: twgl.ProgramInfo;
     private sobelGradientsRenderTarget: RenderTarget2D;
-    private sobelGradientsRGBAData: Uint8Array = new Uint8Array();
 
+    private sobelMagnitudeProgramInfo: twgl.ProgramInfo;
+    private sobelMagnitudeRenderTarget: RenderTarget2D;
+    private sobelMagnitudeRGBAReadbackBuffer: Uint8Array;
+    
     private sobelVectorsProgramInfo: twgl.ProgramInfo;
     private sobelVectorsRenderTarget: RenderTarget2D;
 
-    private neighborScoringProgramInfo: twgl.ProgramInfo;
-    private neighborScoringRenderTarget: RenderTarget2D;
-    private neighborScoringRGBAData: Uint8Array = new Uint8Array();
-    private continuityScores: ContinuityScore[] = [];
+    private sobelContinuityProgramInfo: twgl.ProgramInfo;
+    private sobelContinuityRenderTarget: RenderTarget2D;
 
-    private metadata: Metadata[] = [];
+    private houghTransformProgramInfo: twgl.ProgramInfo;
+    private houghTransformRenderTarget: RenderTarget2D;
+    private houghTransformRGBAReadbackBuffer: Uint8Array;
 
     private debugProgramInfo: twgl.ProgramInfo;
     private debugRenderTarget: RenderTarget2D;
@@ -54,14 +53,19 @@ outColor = texture(u_input, v_uv);
         this.sobelGradientsProgramInfo = this.createProgramInfo(sobelGradientsFrag);
         this.sobelGradientsRenderTarget = RenderTarget2D.createRGBA8(gl);
 
-        this.sobelGradientsProgramInfo = this.createProgramInfo(sobelGradientsFrag);
-        this.sobelGradientsRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.sobelMagnitudeProgramInfo = this.createProgramInfo(sobelMagnitudeFrag);
+        this.sobelMagnitudeRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.sobelMagnitudeRGBAReadbackBuffer = new Uint8Array();
 
         this.sobelVectorsProgramInfo = this.createProgramInfo(sobelVectorsFrag);
         this.sobelVectorsRenderTarget = RenderTarget2D.createRGBA8(gl);
 
-        this.neighborScoringProgramInfo = this.createProgramInfo(neighborScoringFrag);
-        this.neighborScoringRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.sobelContinuityProgramInfo = this.createProgramInfo(sobelContinuityFrag);
+        this.sobelContinuityRenderTarget = RenderTarget2D.createRGBA8(gl);
+
+        this.houghTransformProgramInfo = this.createProgramInfo(houghTransformFrag);
+        this.houghTransformRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.houghTransformRGBAReadbackBuffer = new Uint8Array();
 
         this.debugProgramInfo = this.createProgramInfo(this.debugFragmentShaderSource);
         this.debugRenderTarget = RenderTarget2D.createRGBA8(gl);
@@ -73,139 +77,59 @@ outColor = texture(u_input, v_uv);
             throw new Error('StructurePass expects R8 target');
         }
         this.executeProgram(this.sobelGradientsProgramInfo, renderTargetIn, this.sobelGradientsRenderTarget);
-        this.executeProgram(this.sobelVectorsProgramInfo, this.sobelGradientsRenderTarget, this.sobelVectorsRenderTarget);
-        this.executeNeighborScoring();
-        this.buildMetadata();
-        this.drawJunk(this.neighborScoringRenderTarget.framebufferInfo.width, this.neighborScoringRenderTarget.framebufferInfo.height);
-        return this.neighborScoringRenderTarget;
-    }
+        this.executeProgram(this.sobelMagnitudeProgramInfo, this.sobelGradientsRenderTarget, this.sobelMagnitudeRenderTarget);
+        this.executeSobelVectors();
+        this.executeSobelContinuity();
+        this.executeProgram(this.houghTransformProgramInfo, this.sobelVectorsRenderTarget, this.houghTransformRenderTarget);
+        
+        this.houghTransformRGBAReadbackBuffer = this.readRGBA8Framebuffer(
+            this.gl,
+            this.houghTransformRenderTarget.framebufferInfo.framebuffer,
+            this.houghTransformRenderTarget.framebufferInfo.width,
+            this.houghTransformRenderTarget.framebufferInfo.height,
+            this.houghTransformRGBAReadbackBuffer
+        )
 
+        this.sobelMagnitudeRGBAReadbackBuffer = this.readRGBA8Framebuffer(
+            this.gl,
+            this.sobelMagnitudeRenderTarget.framebufferInfo.framebuffer,
+            this.sobelMagnitudeRenderTarget.framebufferInfo.width,
+            this.sobelMagnitudeRenderTarget.framebufferInfo.height,
+            this.sobelMagnitudeRGBAReadbackBuffer
+        )
 
-    private drawJunk(width: number, height: number): void {
-        let count = 0;
-        this.metadata.sort((a, b) => {
-            const dc = b.continuityScore.score - a.continuityScore.score;
-            if (Math.abs(dc) > 0.01) return dc;
-            return b.magnitude - a.magnitude;
-        });
-        
-        const lumaArray = new Float32Array(this.metadata.length);
-        
-        for (let i = 0; i < this.metadata.length; i++) {
-            const seed = this.metadata[i];
-        
-            if (seed.visited) continue;
-            if (seed.continuityScore.score < 0.96) break;
-        
-            let cur = seed;
-        
-            while (
-                cur &&
-                !cur.visited &&
-                cur.continuityScore.score > 0.8 &&
-                cur.magnitude > 0.04
-            ) {
-                cur.visited = true;
-                lumaArray[cur.index] = cur.magnitude;
-                count++;
-        
-                const nextIdx = cur.nextContinuityScoreIndex;
-                if (nextIdx < 0) break;
-        
-                cur = this.metadata[nextIdx];
-            }
-        }
-        console.log(`StructurePass: drew ${count} pixels in structure lines`);
+        const lumaBuffer = wasm.draw(this.sobelMagnitudeRGBAReadbackBuffer, this.houghTransformRGBAReadbackBuffer);
+
         this.drawLumaArray(
             this.gl,
             this.debugProgramInfo,
             this.debugRenderTarget,
-            width,
-            height,
-            lumaArray,
-            false
+            640,
+            480,
+            lumaBuffer
+        );
+
+        
+
+        return this.sobelContinuityRenderTarget;
+    }
+    
+    private executeSobelVectors():void{
+        this.settings.uniforms['u_magnitude'] = this.sobelMagnitudeRenderTarget.texture;
+        this.executeProgram(
+            this.sobelVectorsProgramInfo,
+            this.sobelGradientsRenderTarget,
+            this.sobelVectorsRenderTarget
         );
     }
 
-    private executeNeighborScoring(): void {
-        this.executeProgram(this.neighborScoringProgramInfo, this.sobelVectorsRenderTarget, this.neighborScoringRenderTarget);
-        const width = this.neighborScoringRenderTarget.framebufferInfo.width;
-        const height = this.neighborScoringRenderTarget.framebufferInfo.height;
-        this.neighborScoringRGBAData = this.readRGBA8Framebuffer(this.gl, this.neighborScoringRenderTarget.framebufferInfo.framebuffer, width, height, this.neighborScoringRGBAData);
-        if (this.continuityScores.length < width * height) {
-            this.continuityScores = new Array(width * height);
-        }
-        for (let i = 0; i < width * height; i++) {
-            const rgbaIndex = i * 4;
-            const r = this.neighborScoringRGBAData[rgbaIndex + 0];
-            const g = this.neighborScoringRGBAData[rgbaIndex + 1];
-            const b = this.neighborScoringRGBAData[rgbaIndex + 2];
-            const a = this.neighborScoringRGBAData[rgbaIndex + 3];
-            this.continuityScores[i] = new ContinuityScore(r, g, b, a);
-        }
-    }
-
-    private buildMetadata() {
-        const width = this.neighborScoringRenderTarget.framebufferInfo.width;
-        const height = this.neighborScoringRenderTarget.framebufferInfo.height;
-
-        if (this.metadata.length < width * height) {
-            this.metadata = new Array(width * height);
-        }
-
-        this.sobelGradientsRGBAData =
-            this.readRGBA8Framebuffer(
-                this.gl,
-                this.sobelGradientsRenderTarget.framebufferInfo.framebuffer,
-                width,
-                height,
-                this.sobelGradientsRGBAData
-            );
-
-        for (let i = 0; i < width * height; i++) {
-            const rgbaIndex = i * 4;
-
-            const b = this.sobelGradientsRGBAData[rgbaIndex + 2];
-            const a = this.sobelGradientsRGBAData[rgbaIndex + 3];
-            const magnitude = ((b << 8) | a) / 65535.0;
-
-            const cs = this.continuityScores[i];
-
-            let nextIndex = -1;
-
-            if (cs.neighborXOffset !== 0 || cs.neighborYOffset !== 0) {
-                const x = i % width;
-                const y = (i / width) | 0;
-
-                const nx = x + cs.neighborXOffset;
-                const ny = y + cs.neighborYOffset;
-
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                    nextIndex = ny * width + nx;
-                }
-            }
-
-            this.metadata[i] = {
-                index: i,
-                visited: false,
-                continuityScore: cs,
-                nextContinuityScoreIndex: nextIndex,
-                magnitude,
-                score: cs.score * magnitude
-            };
-            // let maxMagnitude = 0;
-            // let minMagnitude = Number.POSITIVE_INFINITY;
-            // let maxScore = 0;
-            // let minScore = Number.POSITIVE_INFINITY;
-            // for(let i = 0; i < width * height; i++){
-            //     const meta = this.metadata[i];
-            //     const cs = this.continuityScores[i];
-            //     if(meta.magnitude > maxMagnitude) maxMagnitude = meta.magnitude;
-            //     if(meta.magnitude < minMagnitude) minMagnitude = meta.magnitude;
-            //     if(cs.score > maxScore) maxScore = cs.score;
-            //     if(cs.score < minScore) minScore = cs.score;
-            // }
-        }
+    private executeSobelContinuity():void{
+        this.settings.uniforms['u_magnitude'] = this.sobelMagnitudeRenderTarget.texture;
+        this.executeProgram(
+            this.sobelContinuityProgramInfo,
+            this.sobelVectorsRenderTarget,
+            this.sobelContinuityRenderTarget
+        );
     }
 
     private readRGBA8Framebuffer(

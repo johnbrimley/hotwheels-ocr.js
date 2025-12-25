@@ -23,8 +23,20 @@ vec2 unpackHalf2FromRGBA8LittleEndian(vec4 rgba)
     return unpackHalf2x16(packed);
 }
 
-uint8 packDirections(uint8 pos, uint8 neg){
-    return (pos << 4) | neg;
+float packDirections(float pos, float neg){
+    return (pos*16.0)+neg;
+}
+
+vec4 packScore(float directions, float score)
+{
+    uint q = uint(clamp(score, 0.0, 1.0) * 16777215.0 + 0.5);
+
+    return vec4(
+        directions,
+        float( q        & 0xFFu),
+        float((q >> 8)  & 0xFFu),
+        float((q >> 16) & 0xFFu)
+    ) / 255.0;
 }
 
 float unpackFloatFromRGBA8LittleEndian(vec4 rgba)
@@ -63,6 +75,7 @@ const vec2 offsetDirs[8] = vec2[8](
 );
 
 const float ARC_THRESHOLD = 0.382683432;
+const float EPS = 1e-6;
 
 void main()
 {
@@ -70,16 +83,16 @@ void main()
     vec2 centerVec = unpackHalf2FromRGBA8LittleEndian(texture(u_input, v_uv));
     vec2 centerTangent = vec2(-centerVec.y, centerVec.x);
     float centerMag = unpackFloatFromRGBA8LittleEndian(texture(u_magnitude, v_uv));
-    centerMag = max(centerMag, 1e-6);
+    centerMag = max(centerMag, EPS);
 
     //front and back here just refer to either side of the perimeter pixels.
 
     float bestFrontScore = 0.0;
-    float bestFrontPosition = -1;
-    float bestFrontIsPositive = 0;
+    float bestFrontPosition = -1.0;
+    float bestFrontIsPositive = 0.0;
 
     float bestBackScore = 0.0;
-    float bestBackPosition = -1;
+    float bestBackPosition = -1.0;
 
     for(int i = 0; i <4; i++){
         vec2 front_uv = v_uv + offsets[i] * u_texelSize;
@@ -91,8 +104,8 @@ void main()
         float frontMag = unpackFloatFromRGBA8LittleEndian(texture(u_magnitude, front_uv));
         float backMag = unpackFloatFromRGBA8LittleEndian(texture(u_magnitude, back_uv));
 
-        frontMag = max(frontMag, 1-e6);
-        backMag = max(backMag, 1-e6);
+        frontMag = max(frontMag, EPS);
+        backMag = max(backMag, EPS);
 
         float frontCos = dot(centerVec, frontVec);
         float backCos = dot(centerVec, backVec);
@@ -110,8 +123,8 @@ void main()
         float backMagnitudeAgreement  =
             min(centerMag, backMag) / max(centerMag, backMag);
 
-        frontScore = abs(frontCos) * frontMagnitudeAgreement * frontGradientAgrees * areEligible;
-        backScore = abs(backCos) * backMagnitudeAgreement * backGradientAgrees * areEligible;
+        float frontScore = abs(frontCos) * frontMagnitudeAgreement * frontGradientAgrees * areEligible;
+        float backScore = abs(backCos) * backMagnitudeAgreement * backGradientAgrees * areEligible;
 
         float frontIsPositive = step(0.0, frontDirectionCos);
 
@@ -123,7 +136,7 @@ void main()
         bestFrontIsPositive = mix(bestFrontIsPositive, frontIsPositive, frontIsBetter);
 
         bestBackScore = mix(bestBackScore, backScore, backIsBetter);
-        bestBackPosition = mix(float(bestBackPosition), float(i+4), backIsBetter);
+        bestBackPosition = mix(bestBackPosition, float(i+4), backIsBetter);
     }
 
     float continuity = bestFrontScore * bestBackScore;
@@ -131,14 +144,11 @@ void main()
     //pack the directions into a byte.
     float positiveDirection = mix(bestBackPosition, bestFrontPosition, bestFrontIsPositive);
     float negativeDirection = mix(bestFrontPosition, bestBackPosition, bestFrontIsPositive);
-    uint8 packedDirections = packDirections(positiveDirection, negativeDirection);
+    float packedDirections = packDirections(positiveDirection, negativeDirection);
 
-    outColor = vec4(
-        packedDirections,
-        0.0, //placeholders
-        0.0,
-        0.0
-    )/255;
+    vec4 packedScore = packScore(packedDirections, continuity);
+
+    outColor = packedScore;
 
 
 

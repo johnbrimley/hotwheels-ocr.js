@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "dev:wasm": "cargo watch -C src/rust -w src -w Cargo.toml -i target -s \"wasm-pack build --target web --out-dir ../wasm --out-name hotwheels-ocr-wasm --dev\""
   },
   "devDependencies": {
     "@openai/codex": "^0.73.0",
