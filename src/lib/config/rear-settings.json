@@ -20,8 +20,8 @@
     },
     "sobel": {
       "enabled": true,
-      "sigmaSmall": 1.4,
-      "sigmaLarge": 2.8
+      "magnitudeThreshold": 0.8,
+      "continuityThreshold": 0.8
     },
     "ray-box": { "enabled": false }
   }

@@ -1,3 +1,5 @@
+use bytemuck::cast_slice;
+
 /// View over RGBA8-packed IEEE-754 f32 values
 ///
 /// Layout per element:
@@ -12,18 +14,7 @@ impl<'a> FloatView<'a> {
         Self { bytes }
     }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.bytes.len() / 4
-    }
-
-    /// Read the exact f32 value written by the GPU
-    #[inline]
-    pub fn get(&self, index: usize) -> f32 {
-        let i = index * 4;
-        let b = &self.bytes[i..i + 4];
-
-        let bits = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        f32::from_bits(bits)
+    pub fn as_f32_slice(&self) -> &'a [f32] {
+        cast_slice(self.bytes)
     }
 }

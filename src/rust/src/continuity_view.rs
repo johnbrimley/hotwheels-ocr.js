@@ -35,10 +35,13 @@ impl<'a> ContinuityView<'a> {
         let neg = OFFSETS[neg_i as usize];
 
         // 24-bit UNORM score
-        let score =
+        let scoreUnorm24 =
               (b[1] as u32)
             | ((b[2] as u32) << 8)
             | ((b[3] as u32) << 16);
+
+        //score to float: (score as f32) / 16777215.0;
+        let score = (scoreUnorm24 as f32) / 16777215.0;
 
         Continuity { pos, neg, score }
     }

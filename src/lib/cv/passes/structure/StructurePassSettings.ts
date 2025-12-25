@@ -1,4 +1,5 @@
 import { PassSettingsBase } from "../PassSettingsBase";
+import * as wasm from "../../../../wasm/hotwheels-ocr-wasm.js";
 
 // Uniforms remain for API compatibility; shader ignores them.
 export class StructurePassSettings extends PassSettingsBase {
@@ -18,4 +19,9 @@ export class StructurePassSettings extends PassSettingsBase {
     public set magnitudeThreshold(value: number) {
         this._magnitudeThreshold = value;
     }      
+
+    public toRustStruct(): wasm.StructurePassSettings
+    {
+        return new wasm.StructurePassSettings(this._conitinuityThreshold, this._magnitudeThreshold);
+    }
 }

@@ -53,8 +53,8 @@ export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
     const downscale = new DownscalePass(this.gl, downscaleSettings)
 
     const structureSettings = new StructurePassSettings()
-    structureSettings.sigmaSmall = 1.4
-    structureSettings.sigmaLarge = 2.8
+    structureSettings.magnitudeThreshold = 0.8
+    structureSettings.continuityThreshold = 0.8
     const structure = new StructurePass(this.gl, structureSettings)
 
     const rayBoxSettings = new RayBoxPassSettings()

@@ -7,13 +7,13 @@
   export let required: boolean = false
 
   let enabled = settings.enabled
-  let sigmaSmall = settings.sigmaSmall
-  let sigmaLarge = settings.sigmaLarge
+  let continuityThreshold = settings.continuityThreshold
+  let magnitudeThreshold = settings.magnitudeThreshold
 
   $: if (settings) {
     enabled = settings.enabled
-    sigmaSmall = settings.sigmaSmall
-    sigmaLarge = settings.sigmaLarge
+    continuityThreshold = settings.continuityThreshold
+    magnitudeThreshold = settings.magnitudeThreshold
   }
 
   function setEnabled(value: boolean): void {
@@ -21,14 +21,14 @@
     settings.enabled = value
   }
 
-  function setSigmaSmall(value: number): void {
-    sigmaSmall = value
-    settings.sigmaSmall = value
+  function setContinuityThreshold(value: number): void {
+    continuityThreshold = value
+    settings.continuityThreshold = value
   }
 
-  function setSigmaLarge(value: number): void {
-    sigmaLarge = value
-    settings.sigmaLarge = value
+  function setMagnitudeThreshold(value: number): void {
+    magnitudeThreshold = value
+    settings.magnitudeThreshold = value
   }
 </script>
 
@@ -37,19 +37,19 @@
     <ToggleSetting label="Enabled" checked={enabled} on:change={(e) => setEnabled(e.detail.checked)} />
   {/if}
   <SliderSetting
-    label="Sigma Small"
-    min={1}
-    max={1.8}
-    step={0.05}
-    value={sigmaSmall}
-    on:input={(e) => setSigmaSmall(e.detail.value)}
+    label="Magnitude Threshold"
+    min={0}
+    max={1}
+    step={0.01}
+    value={magnitudeThreshold}
+    on:input={(e) => setMagnitudeThreshold(e.detail.value)}
   />
   <SliderSetting
-    label="Sigma Large"
-    min={2}
-    max={3}
-    step={0.05}
-    value={sigmaLarge}
-    on:input={(e) => setSigmaLarge(e.detail.value)}
+    label="Continuity Threshold"
+    min={0}
+    max={1}
+    step={0.01}
+    value={continuityThreshold}
+    on:input={(e) => setContinuityThreshold(e.detail.value)}
   />
 </div>

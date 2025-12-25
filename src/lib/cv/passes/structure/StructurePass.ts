@@ -23,6 +23,7 @@ export class StructurePass extends PassBase {
 
     private sobelContinuityProgramInfo: twgl.ProgramInfo;
     private sobelContinuityRenderTarget: RenderTarget2D;
+    private sobelContinuityRGBAReadbackBuffer: Uint8Array;
 
     private houghTransformProgramInfo: twgl.ProgramInfo;
     private houghTransformRenderTarget: RenderTarget2D;
@@ -47,8 +48,8 @@ outColor = texture(u_input, v_uv);
 }
 `;
 
-    constructor(gl: WebGL2RenderingContext, private sobelPassSettings: StructurePassSettings) {
-        super(gl, sobelPassSettings);
+    constructor(gl: WebGL2RenderingContext, private structurePassSettings: StructurePassSettings) {
+        super(gl, structurePassSettings);
 
         this.sobelGradientsProgramInfo = this.createProgramInfo(sobelGradientsFrag);
         this.sobelGradientsRenderTarget = RenderTarget2D.createRGBA8(gl);
@@ -62,6 +63,7 @@ outColor = texture(u_input, v_uv);
 
         this.sobelContinuityProgramInfo = this.createProgramInfo(sobelContinuityFrag);
         this.sobelContinuityRenderTarget = RenderTarget2D.createRGBA8(gl);
+        this.sobelContinuityRGBAReadbackBuffer = new Uint8Array();
 
         this.houghTransformProgramInfo = this.createProgramInfo(houghTransformFrag);
         this.houghTransformRenderTarget = RenderTarget2D.createRGBA8(gl);
@@ -98,7 +100,15 @@ outColor = texture(u_input, v_uv);
             this.sobelMagnitudeRGBAReadbackBuffer
         )
 
-        const lumaBuffer = wasm.draw(this.sobelMagnitudeRGBAReadbackBuffer, this.houghTransformRGBAReadbackBuffer);
+        this.sobelContinuityRGBAReadbackBuffer = this.readRGBA8Framebuffer(
+            this.gl,
+            this.sobelContinuityRenderTarget.framebufferInfo.framebuffer,
+            this.sobelContinuityRenderTarget.framebufferInfo.width,
+            this.sobelContinuityRenderTarget.framebufferInfo.height,
+            this.sobelContinuityRGBAReadbackBuffer
+        );
+
+        const lumaBuffer = wasm.draw(this.structurePassSettings.toRustStruct(), this.sobelMagnitudeRGBAReadbackBuffer, this.sobelContinuityRGBAReadbackBuffer, this.houghTransformRGBAReadbackBuffer);
 
         this.drawLumaArray(
             this.gl,

@@ -112,10 +112,8 @@
           settings.sigmaRange = s.sigmaRange
           break
         case 'sobel':
-          settings.kernelRadius = s.kernelRadius
-          settings.directionBias = s.directionBias
-          settings.edgeGain = s.edgeGain
-          settings.minEdge = s.minEdge
+          settings.continuityThreshold = s.continuityThreshold
+          settings.magnitudeThreshold = s.magnitudeThreshold
           break
         case 'magnatude-gate':
           settings.threshold = s.threshold
